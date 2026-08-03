@@ -1,5 +1,5 @@
-import React, { useRef } from 'react';
-import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2, ExternalLink, FileCode } from 'lucide-react';
 import { Boleto, Client, PDFAttachment } from '../../types';
 import { formatCPF } from '../../utils/cpf';
 
@@ -22,6 +22,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
 }) => {
   const [copiedPix, setCopiedPix] = React.useState(false);
   const [copiedLine, setCopiedLine] = React.useState(false);
+  const [activeModalTab, setActiveModalTab] = useState<'pdf' | 'digital'>(boleto.pdfFile ? 'pdf' : 'digital');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pixCNPJKey = '32.922.555/0001-87';
@@ -116,32 +117,83 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 overflow-y-auto space-y-6">
-          {/* PDF Download Alert Banner if attached */}
+          {/* View Selection Tabs if PDF is attached */}
           {boleto.pdfFile && (
-            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg text-red-600">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-red-950">Documento Oficial em PDF disponível</h4>
-                  <p className="text-[11px] text-red-700">Arquivo original enviado pela empresa: {boleto.pdfFile.name}</p>
-                </div>
-              </div>
-              <a
-                href={boleto.pdfFile.dataUrl}
-                download={boleto.pdfFile.name}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm shrink-0 flex items-center gap-1"
+            <div className="bg-slate-100 p-1.5 rounded-xl border border-slate-200 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('pdf')}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
+                  activeModalTab === 'pdf'
+                    ? 'bg-red-600 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Baixar PDF</span>
-              </a>
+                <FileText className="w-4 h-4" />
+                <span>Visualizar PDF do Boleto (Anexo Oficial)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveModalTab('digital')}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-extrabold flex items-center justify-center gap-2 transition-all ${
+                  activeModalTab === 'digital'
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                }`}
+              >
+                <QrCode className="w-4 h-4 text-emerald-400" />
+                <span>Instruções de Pagamento & PIX</span>
+              </button>
             </div>
           )}
 
-          {/* Quick Payment Banner - PIX via CNPJ */}
+          {/* TAB 1: Embedded PDF Viewer */}
+          {activeModalTab === 'pdf' && boleto.pdfFile ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-red-950 text-red-400 border border-red-800 rounded-lg shrink-0">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">{boleto.pdfFile.name}</h4>
+                    <p className="text-xs text-slate-400">Documento em PDF emitido no banco e anexado ao portal</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <a
+                    href={boleto.pdfFile.dataUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors border border-slate-700 flex items-center justify-center gap-1.5"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Abrir em Nova Aba</span>
+                  </a>
+                  <a
+                    href={boleto.pdfFile.dataUrl}
+                    download={boleto.pdfFile.name}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors shadow flex items-center justify-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Baixar Arquivo PDF</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Embedded PDF iframe */}
+              <div className="w-full h-[600px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-300 shadow-inner">
+                <iframe
+                  src={boleto.pdfFile.dataUrl}
+                  className="w-full h-full border-0"
+                  title={boleto.pdfFile.name}
+                />
+              </div>
+            </div>
+          ) : (
+            /* TAB 2 or Default: Digital Summary, PIX & Receipt Upload */
+            <div className="space-y-6">
+              {/* Quick Payment Banner - PIX via CNPJ */}
           <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-emerald-100 rounded-lg text-emerald-700 shrink-0">
@@ -321,7 +373,9 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             <div className="border border-slate-800 rounded p-3 bg-slate-50">
               <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Pagador (Sacado)</div>
               <div className="font-bold text-slate-900">{client ? client.name : 'Cliente Registrado'}</div>
-              <div className="text-slate-600">CPF: {client ? formatCPF(client.cpf) : 'Não informado'}</div>
+              <div className="text-slate-600">
+                {client ? `${client.cpf.replace(/\D/g, '').length > 11 ? 'CNPJ' : 'CPF'}: ${formatCPF(client.cpf)}` : 'Não informado'}
+              </div>
               {client?.address && <div className="text-slate-500 text-[11px] mt-0.5">{client.address}</div>}
             </div>
 
@@ -338,6 +392,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
               <span className="font-mono text-[10px] text-slate-500 mt-1">{boleto.barcode}</span>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

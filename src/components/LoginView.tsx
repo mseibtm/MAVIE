@@ -59,8 +59,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     e.preventDefault();
     const rawCpf = cleanCPF(cpfInput);
 
-    if (rawCpf.length !== 11) {
-      setErrorMsg('Informe um CPF completo com 11 dígitos.');
+    if (rawCpf.length !== 11 && rawCpf.length !== 14) {
+      setErrorMsg('Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.');
       return;
     }
 
@@ -69,12 +69,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return;
     }
 
-    // Search client by CPF
+    // Search client by CPF/CNPJ
     const matchedClient = clients.find(c => cleanCPF(c.cpf) === rawCpf);
 
     if (!matchedClient) {
-      setErrorMsg('CPF não cadastrado no sistema. Verifique o número digitado ou solicite seu cadastro.');
-      onToast('error', 'CPF não encontrado', 'CPF não consta na base de clientes ativos.');
+      setErrorMsg('CPF ou CNPJ não cadastrado no sistema. Verifique os dados ou solicite seu cadastro.');
+      onToast('error', 'Cliente não encontrado', 'CPF/CNPJ não consta na base de clientes ativos.');
       return;
     }
 
@@ -86,7 +86,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     // Check Password (default to '123' if not explicitly defined)
     const clientExpectedPass = matchedClient.password || '123';
     if (passwordInput !== clientExpectedPass) {
-      setErrorMsg('Senha incorreta para o CPF informado. Esqueceu a senha? Clique no botão verde abaixo para solicitar suporte no WhatsApp.');
+      setErrorMsg('Senha incorreta para o CPF/CNPJ informado. Esqueceu a senha? Clique no botão verde abaixo para solicitar suporte no WhatsApp.');
       onToast('error', 'Senha Incorreta', 'Credenciais de acesso inválidas.');
       return;
     }
@@ -98,7 +98,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const handleForgotPasswordWhatsApp = (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     const text = cpfInput.trim()
-      ? `Olá! Esqueci minha senha de acesso ao Portal do Cliente. Meu CPF é ${cpfInput}. Poderiam redefinir minha senha de acesso?`
+      ? `Olá! Esqueci minha senha de acesso ao Portal do Cliente. Meu CPF/CNPJ é ${cpfInput}. Poderiam redefinir minha senha de acesso?`
       : `Olá! Esqueci minha senha de acesso ao Portal do Cliente. Poderiam redefinir minha senha de acesso?`;
 
     const url = `https://wa.me/${COMPANY_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
@@ -143,7 +143,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Área do Cliente (CPF + Senha)</span>
+            <span>Área do Cliente (CPF/CNPJ)</span>
           </button>
           <button
             onClick={handleGestaoIconClick}
@@ -174,7 +174,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               {/* CPF Field */}
               <div>
                 <label htmlFor="cpf-input" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  CPF do Titular *
+                  CPF ou CNPJ do Titular *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -185,8 +185,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     type="text"
                     value={cpfInput}
                     onChange={handleCpfChange}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
+                    placeholder="CPF ou CNPJ"
+                    maxLength={18}
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-base font-bold placeholder-slate-600 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
                     required
                   />

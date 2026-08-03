@@ -73,6 +73,11 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       return;
     }
 
+    if (!pdfFile) {
+      onToast('error', 'Upload de PDF Obrigatório', 'Você deve realizar o upload do arquivo PDF do boleto gerado no seu banco.');
+      return;
+    }
+
     const pixKeyCNPJ = '32.922.555/0001-87';
 
     onAddBoleto({
@@ -386,7 +391,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
               <PDFUploader
                 currentFile={pdfFile}
                 onFileChange={setPdfFile}
-                label="Upload do Arquivo em PDF do Boleto (Opcional)"
+                label="Upload do Arquivo em PDF do Boleto (Obrigatório) *"
                 onToast={onToast}
               />
 

@@ -76,13 +76,13 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
     e.preventDefault();
 
     const rawCpf = cleanCPF(cpf);
-    if (rawCpf.length !== 11) {
-      onToast('error', 'CPF Inválido', 'O CPF deve possuir exatamente 11 dígitos.');
+    if (rawCpf.length !== 11 && rawCpf.length !== 14) {
+      onToast('error', 'Documento Inválido', 'O CPF deve possuir 11 dígitos ou o CNPJ deve possuir 14 dígitos.');
       return;
     }
 
     if (!validateCPF(cpf)) {
-      onToast('error', 'CPF Inválido', 'O número de CPF informado não é um CPF brasileiro válido.');
+      onToast('error', 'Documento Inválido', 'O número de CPF ou CNPJ informado não é um documento válido.');
       return;
     }
 
@@ -92,11 +92,11 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
       return;
     }
 
-    // Check duplicate CPF if creating new
+    // Check duplicate CPF/CNPJ if creating new
     if (!editingClient) {
       const exists = clients.some(c => cleanCPF(c.cpf) === rawCpf);
       if (exists) {
-        onToast('error', 'CPF já cadastrado', 'Já existe um cliente registrado com este CPF.');
+        onToast('error', 'CPF/CNPJ já cadastrado', 'Já existe um cliente registrado com este CPF ou CNPJ.');
         return;
       }
 
@@ -176,7 +176,7 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por Nome ou CPF..."
+              placeholder="Buscar por Nome, CPF ou CNPJ..."
               className="pl-9 pr-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -210,7 +210,7 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <span className="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-950 text-amber-300 border border-slate-800 uppercase tracking-wider font-mono">
-                    CPF: {client.cpf}
+                    CPF/CNPJ: {client.cpf}
                   </span>
                   <span
                     className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
@@ -348,14 +348,14 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
 
                 <div>
                   <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    CPF (Login do Cliente) *
+                    CPF ou CNPJ (Login do Cliente) *
                   </label>
                   <input
                     type="text"
                     value={cpf}
                     onChange={handleCpfChange}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
+                    placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                    maxLength={18}
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold focus:ring-2 focus:ring-amber-500"
                     required
                   />

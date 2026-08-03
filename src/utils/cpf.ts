@@ -1,21 +1,79 @@
 /**
- * Utilities for Brazilian CPF validation and formatting
+ * Utilities for Brazilian CPF / CNPJ validation and formatting
  */
 
-export function cleanCPF(cpf: string): string {
-  return cpf.replace(/\D/g, '');
+export function cleanCPF(doc: string): string {
+  return (doc || '').replace(/\D/g, '');
+}
+
+export function cleanCpfCnpj(doc: string): string {
+  return cleanCPF(doc);
+}
+
+export function formatCNPJ(cnpj: string): string {
+  const digits = cleanCPF(cnpj).slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+  if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
 }
 
 export function formatCPF(cpf: string): string {
-  const digits = cleanCPF(cpf).slice(0, 11);
+  const digits = cleanCPF(cpf);
+  if (digits.length > 11) {
+    return formatCNPJ(digits);
+  }
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
   if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
 }
 
+export function formatCpfCnpj(doc: string): string {
+  return formatCPF(doc);
+}
+
+export function validateCNPJ(cnpj: string): boolean {
+  const clean = cleanCPF(cnpj);
+  if (clean.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(clean)) return false;
+
+  let size = clean.length - 2;
+  let numbers = clean.substring(0, size);
+  const digits = clean.substring(size);
+  let sum = 0;
+  let pos = size - 7;
+
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i), 10) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(0), 10)) return false;
+
+  size = size + 1;
+  numbers = clean.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i), 10) * pos--;
+    if (pos < 2) pos = 9;
+  }
+
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(1), 10)) return false;
+
+  return true;
+}
+
 export function validateCPF(cpf: string): boolean {
   const clean = cleanCPF(cpf);
+  if (clean.length === 14) {
+    return validateCNPJ(clean);
+  }
   if (clean.length !== 11) return false;
   
   // Reject repetitive digits (e.g. 111.111.111-11)
@@ -40,6 +98,10 @@ export function validateCPF(cpf: string): boolean {
   if (remainder !== parseInt(clean.substring(10, 11), 10)) return false;
 
   return true;
+}
+
+export function validateCpfCnpj(doc: string): boolean {
+  return validateCPF(doc);
 }
 
 export function generateRandomBarcode(): string {
