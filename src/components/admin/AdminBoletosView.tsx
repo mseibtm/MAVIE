@@ -388,43 +388,19 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                 onToast={onToast}
               />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Status Inicial
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as BoletoStatus)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="pending">A vencer</option>
-                    <option value="paid">Pago</option>
-                    <option value="overdue">Em atraso</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Linha Digitável
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateLine}
-                    className="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold rounded-xl border border-slate-700 transition-colors text-[11px]"
-                  >
-                    Gerar Linha Novamente
-                  </button>
-                </div>
-              </div>
-
               <div>
                 <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Preview da Linha Digitável
+                  Status Inicial
                 </label>
-                <code className="block p-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-300 font-mono text-[11px] break-all">
-                  {customLine}
-                </code>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as BoletoStatus)}
+                  className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="pending">A vencer</option>
+                  <option value="paid">Pago</option>
+                  <option value="overdue">Em atraso</option>
+                </select>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">

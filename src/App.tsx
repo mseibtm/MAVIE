@@ -7,6 +7,7 @@ import {
   getStoredTickets, saveStoredTickets,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
+  getStoredSession, saveStoredSession, touchStoredSession,
   resetToInitialData
 } from './utils/storage';
 import {
@@ -51,8 +52,11 @@ import { AdminNFesView } from './components/admin/AdminNFesView';
 import { AdminTicketsView } from './components/admin/AdminTicketsView';
 
 export default function App() {
-  const [session, setSession] = useState<UserSession | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('boletos');
+  const [session, setSession] = useState<UserSession | null>(() => getStoredSession());
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const initSess = getStoredSession();
+    return initSess?.role === 'admin' ? 'dashboard' : 'boletos';
+  });
 
   // State collections
   const [clients, setClients] = useState<Client[]>([]);
@@ -76,6 +80,34 @@ export default function App() {
   const [adminPassword, setAdminPassword] = useState<string>('admin123');
   const [isEditAdminPasswordModalOpen, setIsEditAdminPasswordModalOpen] = useState<boolean>(false);
 
+  // Keep session alive and check 30-min expiration
+  useEffect(() => {
+    if (!session) return;
+    touchStoredSession();
+
+    const interval = setInterval(() => {
+      const activeSession = getStoredSession();
+      if (!activeSession) {
+        setSession(null);
+        addToast('info', 'Sessão Expirada', 'Sua sessão de 30 minutos expirou. Por favor, faça login novamente.');
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [session]);
+
+  // Keep client session data in sync with latest client records
+  useEffect(() => {
+    if (session?.role === 'client' && session.client && clients.length > 0) {
+      const updatedClient = clients.find((c) => c.id === session.client?.id);
+      if (updatedClient && JSON.stringify(updatedClient) !== JSON.stringify(session.client)) {
+        const updatedSession: UserSession = { ...session, client: updatedClient };
+        setSession(updatedSession);
+        saveStoredSession(updatedSession);
+      }
+    }
+  }, [clients, session]);
+
   // Load stored data on mount & subscribe to Firestore
   useEffect(() => {
     // 1. Initial local load
@@ -94,7 +126,34 @@ export default function App() {
     // 2. Seed Firestore if empty, then listen to realtime updates
     seedFirestoreIfEmpty().then(() => {
       const unsubClients = subscribeClients((cl) => setClients(cl));
-      const unsubBoletos = subscribeBoletos((bol) => setBoletos(bol));
+      const unsubBoletos = subscribeBoletos((remoteBoletos) => {
+        setBoletos((prevLocal) => {
+          const localMap = new Map<string, Boleto>(prevLocal.map((b) => [b.id, b]));
+          const mergedRemote = remoteBoletos.map((rb) => {
+            const lb = localMap.get(rb.id);
+            if (lb) {
+              return {
+                ...rb,
+                pdfFile: (lb.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                  ? lb.pdfFile
+                  : rb.pdfFile,
+                paymentReceipt: (lb.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                  ? lb.paymentReceipt
+                  : rb.paymentReceipt,
+              };
+            }
+            return rb;
+          });
+
+          // Keep any local boletos that remote doesn't have yet
+          const remoteIds = new Set(remoteBoletos.map((rb) => rb.id));
+          const localOnly = prevLocal.filter((lb) => !remoteIds.has(lb.id));
+
+          const finalBoletos = [...localOnly, ...mergedRemote];
+          saveStoredBoletos(finalBoletos);
+          return finalBoletos;
+        });
+      });
       const unsubNfes = subscribeNFes((nf) => setNfes(nf));
       const unsubTickets = subscribeTickets((tk) => setTickets(tk));
       const unsubNotifs = subscribeNotifications((nt) => setNotifications(nt));
@@ -139,17 +198,22 @@ export default function App() {
 
   // Login Handlers
   const handleLoginClient = (client: Client) => {
-    setSession({ role: 'client', client });
+    const newSession: UserSession = { role: 'client', client };
+    setSession(newSession);
+    saveStoredSession(newSession);
     setActiveTab('boletos');
   };
 
   const handleLoginAdmin = () => {
-    setSession({ role: 'admin' });
+    const newSession: UserSession = { role: 'admin' };
+    setSession(newSession);
+    saveStoredSession(newSession);
     setActiveTab('dashboard');
   };
 
   const handleLogout = () => {
     setSession(null);
+    saveStoredSession(null);
     addToast('info', 'Sessão encerrada', 'Você saiu da sua conta com segurança.');
   };
 
@@ -402,7 +466,10 @@ export default function App() {
       <Header
         session={session}
         onLogout={handleLogout}
-        onSwitchRole={() => setSession(null)}
+        onSwitchRole={() => {
+          setSession(null);
+          saveStoredSession(null);
+        }}
         activeTab={activeTab}
         onTabChange={(tab) => {
           setActiveTab(tab);

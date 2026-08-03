@@ -151,7 +151,30 @@ export async function saveClientToFirestore(client: Client) {
 
 export async function saveBoletoToFirestore(boleto: Boleto) {
   try {
-    await setDoc(doc(db, COLS.BOLETOS, boleto.id), boleto, { merge: true });
+    const docToSave: Record<string, any> = { ...boleto };
+
+    // Prevent Firestore document size limit crash (1MB) if PDF base64 is huge
+    if (docToSave.pdfFile && docToSave.pdfFile.dataUrl && docToSave.pdfFile.dataUrl.length > 700000) {
+      docToSave.pdfFile = {
+        name: docToSave.pdfFile.name,
+        size: docToSave.pdfFile.size,
+        uploadedAt: docToSave.pdfFile.uploadedAt,
+        dataUrl: docToSave.pdfFile.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+
+    if (docToSave.paymentReceipt && docToSave.paymentReceipt.dataUrl && docToSave.paymentReceipt.dataUrl.length > 700000) {
+      docToSave.paymentReceipt = {
+        name: docToSave.paymentReceipt.name,
+        size: docToSave.paymentReceipt.size,
+        uploadedAt: docToSave.paymentReceipt.uploadedAt,
+        dataUrl: docToSave.paymentReceipt.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+
+    await setDoc(doc(db, COLS.BOLETOS, boleto.id), docToSave as Boleto, { merge: true });
   } catch (err) {
     console.error('Error saving boleto to Firestore:', err);
   }

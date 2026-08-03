@@ -227,25 +227,6 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             )}
           </div>
 
-          {/* Line Digitable Copy Box */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-              Linha Digitável do Boleto
-            </label>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <code className="flex-1 p-2.5 bg-white rounded-lg border border-slate-300 font-mono text-sm font-bold text-slate-900 break-all select-all">
-                {boleto.lineDigitable}
-              </code>
-              <button
-                onClick={handleCopyLine}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shrink-0 transition-colors"
-              >
-                {copiedLine ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedLine ? 'Copiado!' : 'Copiar Código'}</span>
-              </button>
-            </div>
-          </div>
-
           {/* Official Layout Representation of Boleto */}
           <div className="border-2 border-slate-800 rounded-lg p-5 font-sans bg-white text-xs space-y-4 shadow-sm">
             {/* Bank Header */}
@@ -258,8 +239,8 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                   341-7
                 </div>
               </div>
-              <div className="font-mono font-bold text-sm md:text-base text-right text-slate-900 break-all">
-                {boleto.lineDigitable}
+              <div className="text-right text-slate-600 font-bold text-xs">
+                RECIBO DO SACADO
               </div>
             </div>
 

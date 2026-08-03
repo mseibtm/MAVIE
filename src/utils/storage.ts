@@ -1,4 +1,4 @@
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession } from '../types';
 import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS } from '../data/mockData';
 
 const KEYS = {
@@ -8,6 +8,56 @@ const KEYS = {
   TICKETS: 'app_portal_tickets',
   NOTIFICATIONS: 'app_portal_notifications',
   ADMIN_PASSWORD: 'app_portal_admin_password',
+  SESSION: 'app_portal_user_session',
+};
+
+const SESSION_EXPIRATION_MS = 30 * 60 * 1000; // 30 minutos
+
+export interface StoredSession {
+  session: UserSession;
+  timestamp: number;
+}
+
+export const getStoredSession = (): UserSession | null => {
+  const data = localStorage.getItem(KEYS.SESSION);
+  if (!data) return null;
+  try {
+    const parsed: StoredSession = JSON.parse(data);
+    const now = Date.now();
+    if (now - parsed.timestamp > SESSION_EXPIRATION_MS) {
+      localStorage.removeItem(KEYS.SESSION);
+      return null;
+    }
+    return parsed.session;
+  } catch {
+    localStorage.removeItem(KEYS.SESSION);
+    return null;
+  }
+};
+
+export const saveStoredSession = (session: UserSession | null) => {
+  if (!session) {
+    localStorage.removeItem(KEYS.SESSION);
+  } else {
+    const data: StoredSession = {
+      session,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(KEYS.SESSION, JSON.stringify(data));
+  }
+};
+
+export const touchStoredSession = () => {
+  const data = localStorage.getItem(KEYS.SESSION);
+  if (data) {
+    try {
+      const parsed: StoredSession = JSON.parse(data);
+      parsed.timestamp = Date.now();
+      localStorage.setItem(KEYS.SESSION, JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+  }
 };
 
 export const getStoredClients = (): Client[] => {
