@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-black text-slate-100 antialiased selection:bg-amber-500 selection:text-black;
+    background-color: #000000;
+  }
+}

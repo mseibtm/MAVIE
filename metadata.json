@@ -1,0 +1,6 @@
+{
+  "name": "Portal do Cliente - Boletos e Serviços",
+  "description": "Aplicativo para consulta de boletos, notas fiscais, chamados de suporte e gestão administrativa de clientes por CPF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

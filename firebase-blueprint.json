@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "clients": {
+      "title": "Clients",
+      "description": "Registered clients in the portal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cpfCnpj": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "cpfCnpj", "email"]
+    },
+    "boletos": {
+      "title": "Boletos",
+      "description": "Boletos and PIX billing documents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string" },
+        "lineDigitable": { "type": "string" },
+        "pixKey": { "type": "string" },
+        "barcode": { "type": "string" },
+        "paidAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "clientId", "amount", "dueDate", "status"]
+    },
+    "nfes": {
+      "title": "Nota Fiscal Eletrônica",
+      "description": "Issued service invoices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "number": { "type": "string" },
+        "issueDate": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "serviceDescription": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "clientId", "number", "amount", "status"]
+    },
+    "tickets": {
+      "title": "Support Tickets",
+      "description": "Customer support requests and messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "clientId", "title", "status"]
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "In-app and push notification logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string" },
+        "boletoId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "read": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "title", "body", "type", "read", "timestamp"]
+    }
+  }
+}
