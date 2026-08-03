@@ -24,14 +24,15 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  // Filter notifications relevant to current user
+  // Filter notifications relevant strictly to current user for privacy
   const userNotifications = notifications.filter((n) => {
-    if (!session) return true;
+    if (!session) return false;
     if (session.role === 'admin') return true;
     if (session.role === 'client' && session.client) {
-      return !n.clientId || n.clientId === session.client.id;
+      // Strictly only notifications assigned to THIS client ID
+      return n.clientId === session.client.id;
     }
-    return true;
+    return false;
   });
 
   const unreadCount = userNotifications.filter((n) => !n.read).length;
@@ -197,7 +198,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                         </span>
                       </div>
                       <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
-                        {notif.body}
+                        {session?.role === 'client' && session.client
+                          ? notif.body
+                              .replace(`para ${session.client.name}`, 'para você')
+                              .replace(`(${session.client.name})`, '')
+                          : notif.body}
                       </p>
                     </div>
 
