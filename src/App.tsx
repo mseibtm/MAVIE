@@ -25,10 +25,13 @@ import {
   subscribeNotifications,
   subscribeAdminPassword,
   saveClientToFirestore,
+  deleteClientFromFirestore,
   saveBoletoToFirestore,
   deleteBoletoFromFirestore,
   saveNFeToFirestore,
+  deleteNFeFromFirestore,
   saveTicketToFirestore,
+  deleteTicketFromFirestore,
   saveNotificationToFirestore,
   saveAdminPasswordToFirestore
 } from './lib/firestoreSync';
@@ -125,7 +128,10 @@ export default function App() {
 
     // 2. Seed Firestore if empty, then listen to realtime updates
     seedFirestoreIfEmpty().then(() => {
-      const unsubClients = subscribeClients((cl) => setClients(cl));
+      const unsubClients = subscribeClients((cl) => {
+        setClients(cl);
+        saveStoredClients(cl);
+      });
       const unsubBoletos = subscribeBoletos((remoteBoletos) => {
         setBoletos((prevLocal) => {
           const localMap = new Map<string, Boleto>(prevLocal.map((b) => [b.id, b]));
@@ -145,18 +151,22 @@ export default function App() {
             return rb;
           });
 
-          // Keep any local boletos that remote doesn't have yet
-          const remoteIds = new Set(remoteBoletos.map((rb) => rb.id));
-          const localOnly = prevLocal.filter((lb) => !remoteIds.has(lb.id));
-
-          const finalBoletos = [...localOnly, ...mergedRemote];
-          saveStoredBoletos(finalBoletos);
-          return finalBoletos;
+          saveStoredBoletos(mergedRemote);
+          return mergedRemote;
         });
       });
-      const unsubNfes = subscribeNFes((nf) => setNfes(nf));
-      const unsubTickets = subscribeTickets((tk) => setTickets(tk));
-      const unsubNotifs = subscribeNotifications((nt) => setNotifications(nt));
+      const unsubNfes = subscribeNFes((nf) => {
+        setNfes(nf);
+        saveStoredNFes(nf);
+      });
+      const unsubTickets = subscribeTickets((tk) => {
+        setTickets(tk);
+        saveStoredTickets(tk);
+      });
+      const unsubNotifs = subscribeNotifications((nt) => {
+        setNotifications(nt);
+        saveStoredNotifications(nt);
+      });
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
 
       return () => {
@@ -253,16 +263,23 @@ export default function App() {
     const updatedClients = clients.filter((c) => c.id !== clientId);
     setClients(updatedClients);
     saveStoredClients(updatedClients);
+    deleteClientFromFirestore(clientId);
 
     // Remove associated boletos, NFs, tickets
+    const clientBoletos = boletos.filter((b) => b.clientId === clientId);
+    clientBoletos.forEach((b) => deleteBoletoFromFirestore(b.id));
     const updatedBoletos = boletos.filter((b) => b.clientId !== clientId);
     setBoletos(updatedBoletos);
     saveStoredBoletos(updatedBoletos);
 
+    const clientNFes = nfes.filter((n) => n.clientId === clientId);
+    clientNFes.forEach((n) => deleteNFeFromFirestore(n.id));
     const updatedNFes = nfes.filter((n) => n.clientId !== clientId);
     setNfes(updatedNFes);
     saveStoredNFes(updatedNFes);
 
+    const clientTickets = tickets.filter((t) => t.clientId === clientId);
+    clientTickets.forEach((t) => deleteTicketFromFirestore(t.id));
     const updatedTickets = tickets.filter((t) => t.clientId !== clientId);
     setTickets(updatedTickets);
     saveStoredTickets(updatedTickets);
@@ -384,6 +401,7 @@ export default function App() {
     const updated = nfes.filter((n) => n.id !== nfeId);
     setNfes(updated);
     saveStoredNFes(updated);
+    deleteNFeFromFirestore(nfeId);
   };
 
   // Tickets CRUD

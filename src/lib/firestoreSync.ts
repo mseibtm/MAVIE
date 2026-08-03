@@ -59,9 +59,7 @@ export function subscribeClients(callback: (clients: Client[]) => void) {
     (snap) => {
       const list: Client[] = [];
       snap.forEach((d) => list.push(d.data() as Client));
-      if (list.length > 0) {
-        callback(list);
-      }
+      callback(list);
     },
     (err) => console.warn('Firestore clients listener error:', err)
   );
@@ -73,11 +71,9 @@ export function subscribeBoletos(callback: (boletos: Boleto[]) => void) {
     (snap) => {
       const list: Boleto[] = [];
       snap.forEach((d) => list.push(d.data() as Boleto));
-      if (list.length > 0) {
-        // Sort by date desc
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        callback(list);
-      }
+      // Sort by date desc
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      callback(list);
     },
     (err) => console.warn('Firestore boletos listener error:', err)
   );
@@ -89,9 +85,7 @@ export function subscribeNFes(callback: (nfes: NotaFiscal[]) => void) {
     (snap) => {
       const list: NotaFiscal[] = [];
       snap.forEach((d) => list.push(d.data() as NotaFiscal));
-      if (list.length > 0) {
-        callback(list);
-      }
+      callback(list);
     },
     (err) => console.warn('Firestore NFes listener error:', err)
   );
@@ -103,9 +97,7 @@ export function subscribeTickets(callback: (tickets: SupportTicket[]) => void) {
     (snap) => {
       const list: SupportTicket[] = [];
       snap.forEach((d) => list.push(d.data() as SupportTicket));
-      if (list.length > 0) {
-        callback(list);
-      }
+      callback(list);
     },
     (err) => console.warn('Firestore tickets listener error:', err)
   );
@@ -117,10 +109,8 @@ export function subscribeNotifications(callback: (notifs: AppNotification[]) => 
     (snap) => {
       const list: AppNotification[] = [];
       snap.forEach((d) => list.push(d.data() as AppNotification));
-      if (list.length > 0) {
-        list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        callback(list);
-      }
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      callback(list);
     },
     (err) => console.warn('Firestore notifications listener error:', err)
   );
@@ -180,11 +170,35 @@ export async function saveBoletoToFirestore(boleto: Boleto) {
   }
 }
 
+export async function deleteClientFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.CLIENTS, id));
+  } catch (err) {
+    console.error('Error deleting client from Firestore:', err);
+  }
+}
+
 export async function deleteBoletoFromFirestore(id: string) {
   try {
     await deleteDoc(doc(db, COLS.BOLETOS, id));
   } catch (err) {
     console.error('Error deleting boleto from Firestore:', err);
+  }
+}
+
+export async function deleteNFeFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.NFES, id));
+  } catch (err) {
+    console.error('Error deleting NFe from Firestore:', err);
+  }
+}
+
+export async function deleteTicketFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.TICKETS, id));
+  } catch (err) {
+    console.error('Error deleting ticket from Firestore:', err);
   }
 }
 

@@ -40,9 +40,11 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   const [pdfFile, setPdfFile] = useState<PDFAttachment | undefined>(undefined);
 
   const openNewBoletoModal = () => {
-    setFormClientId(clients[0]?.id || '');
+    const initialClient = clients.find(c => c.id === selectedClientId) || clients[0];
+    const initialId = initialClient?.id || '';
+    setFormClientId(initialId);
     setDescription('Serviços Prestados - Ref. Mês Vigente');
-    setAmount('1450.00');
+    setAmount(initialClient?.monthlyFee ? String(initialClient.monthlyFee) : '0.00');
     // Default due date: +10 days
     const nextTenDays = new Date();
     nextTenDays.setDate(nextTenDays.getDate() + 10);
