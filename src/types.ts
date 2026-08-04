@@ -101,3 +101,15 @@ export interface UserSession {
   role: Role;
   client?: Client;
 }
+
+export interface SporadicService {
+  id: string;
+  clientId: string;
+  description: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  status: 'realized' | 'pending';
+  category?: string;
+  notes?: string;
+  createdAt: string;
+}

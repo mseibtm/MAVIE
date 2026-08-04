@@ -8,8 +8,8 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification } from '../types';
-import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS } from '../data/mockData';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService } from '../types';
+import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 // Firestore collections
 const COLS = {
@@ -17,6 +17,7 @@ const COLS = {
   BOLETOS: 'boletos',
   NFES: 'nfes',
   TICKETS: 'tickets',
+  SPORADIC: 'sporadic_services',
   NOTIFICATIONS: 'notifications',
 };
 
@@ -56,6 +57,9 @@ export async function seedFirestoreIfEmpty() {
       });
       INITIAL_TICKETS.forEach((t) => {
         batch.set(doc(db, COLS.TICKETS, t.id), removeUndefinedFields(t));
+      });
+      INITIAL_SPORADIC_SERVICES.forEach((s) => {
+        batch.set(doc(db, COLS.SPORADIC, s.id), removeUndefinedFields(s));
       });
 
       await batch.commit();
@@ -116,6 +120,19 @@ export function subscribeTickets(callback: (tickets: SupportTicket[]) => void) {
       callback(list);
     },
     (err) => console.warn('Firestore tickets listener error:', err)
+  );
+}
+
+export function subscribeSporadicServices(callback: (services: SporadicService[]) => void) {
+  return onSnapshot(
+    collection(db, COLS.SPORADIC),
+    (snap) => {
+      const list: SporadicService[] = [];
+      snap.forEach((d) => list.push(d.data() as SporadicService));
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      callback(list);
+    },
+    (err) => console.warn('Firestore sporadic services listener error:', err)
   );
 }
 
@@ -255,5 +272,21 @@ export async function saveAdminPasswordToFirestore(password: string) {
     await setDoc(doc(db, 'settings', 'admin'), { password, updatedAt: new Date().toISOString() }, { merge: true });
   } catch (err) {
     console.error('Error saving admin password to Firestore:', err);
+  }
+}
+
+export async function saveSporadicServiceToFirestore(service: SporadicService) {
+  try {
+    await setDoc(doc(db, COLS.SPORADIC, service.id), removeUndefinedFields(service), { merge: true });
+  } catch (err) {
+    console.error('Error saving sporadic service to Firestore:', err);
+  }
+}
+
+export async function deleteSporadicServiceFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.SPORADIC, id));
+  } catch (err) {
+    console.error('Error deleting sporadic service from Firestore:', err);
   }
 }

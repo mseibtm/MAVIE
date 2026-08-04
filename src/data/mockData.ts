@@ -1,4 +1,4 @@
-import { Client, Boleto, NotaFiscal, SupportTicket } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, SporadicService } from '../types';
 import { generateDigitableLine, generateNFeAccessKey } from '../utils/cpf';
 
 export const INITIAL_CLIENTS: Client[] = [
@@ -269,5 +269,41 @@ export const INITIAL_TICKETS: SupportTicket[] = [
         timestamp: '2026-07-10T16:00:00Z',
       }
     ],
+  },
+];
+
+export const INITIAL_SPORADIC_SERVICES: SporadicService[] = [
+  {
+    id: 'sp-1',
+    clientId: 'cli-1',
+    description: 'Consultoria Financeira e Treinamento de Equipe',
+    amount: 1500.0,
+    date: '2026-07-15',
+    status: 'realized',
+    category: 'Consultoria',
+    notes: 'Serviço prestado avulso para reestruturação fiscal',
+    createdAt: '2026-07-10T10:00:00Z',
+  },
+  {
+    id: 'sp-2',
+    clientId: 'cli-2',
+    description: 'Migração de Dados e Suporte Técnico Avançado',
+    amount: 850.0,
+    date: '2026-07-20',
+    status: 'realized',
+    category: 'Suporte Técnico',
+    notes: 'Desenvolvimento e integração de banco de dados',
+    createdAt: '2026-07-18T14:30:00Z',
+  },
+  {
+    id: 'sp-3',
+    clientId: 'cli-3',
+    description: 'Emissão Especial de Laudo Técnico e Relatório',
+    amount: 600.0,
+    date: '2026-08-01',
+    status: 'pending',
+    category: 'Serviço Avulso',
+    notes: 'Aguardando quitação do cliente',
+    createdAt: '2026-08-01T09:00:00Z',
   },
 ];

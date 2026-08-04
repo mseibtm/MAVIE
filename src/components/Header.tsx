@@ -12,6 +12,7 @@ interface HeaderProps {
   onTabChange: (tab: string) => void;
   onResetData?: () => void;
   onOpenEditAdminPassword?: () => void;
+  onOpenEditClientPassword?: () => void;
   notifications?: AppNotification[];
   pushPermission?: NotificationPermission;
   onRequestPushPermission?: () => void;
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onResetData,
   onOpenEditAdminPassword,
+  onOpenEditClientPassword,
   notifications = [],
   pushPermission = 'default',
   onRequestPushPermission = () => {},
@@ -204,6 +206,17 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     <KeyRound className="w-3.5 h-3.5 text-amber-400" />
                     <span className="hidden md:inline">Alterar Senha</span>
+                  </button>
+                )}
+
+                {session.role === 'client' && onOpenEditClientPassword && (
+                  <button
+                    onClick={onOpenEditClientPassword}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-lg transition-colors border border-amber-500/30"
+                    title="Trocar Senha de Acesso"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden md:inline">Trocar Senha</span>
                   </button>
                 )}
 

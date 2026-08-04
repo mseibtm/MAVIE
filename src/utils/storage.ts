@@ -1,11 +1,12 @@
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession } from '../types';
-import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS } from '../data/mockData';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession, SporadicService } from '../types';
+import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 const KEYS = {
   CLIENTS: 'app_portal_clients',
   BOLETOS: 'app_portal_boletos',
   NFES: 'app_portal_nfes',
   TICKETS: 'app_portal_tickets',
+  SPORADIC_SERVICES: 'app_portal_sporadic_services',
   NOTIFICATIONS: 'app_portal_notifications',
   ADMIN_PASSWORD: 'app_portal_admin_password',
   SESSION: 'app_portal_user_session',
@@ -128,6 +129,23 @@ export const saveStoredTickets = (tickets: SupportTicket[]) => {
   localStorage.setItem(KEYS.TICKETS, JSON.stringify(tickets));
 };
 
+export const getStoredSporadicServices = (): SporadicService[] => {
+  const data = localStorage.getItem(KEYS.SPORADIC_SERVICES);
+  if (!data) {
+    localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(INITIAL_SPORADIC_SERVICES));
+    return INITIAL_SPORADIC_SERVICES;
+  }
+  try {
+    return JSON.parse(data);
+  } catch {
+    return INITIAL_SPORADIC_SERVICES;
+  }
+};
+
+export const saveStoredSporadicServices = (services: SporadicService[]) => {
+  localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(services));
+};
+
 export const getStoredNotifications = (): AppNotification[] => {
   const data = localStorage.getItem(KEYS.NOTIFICATIONS);
   if (!data) return [];
@@ -156,4 +174,5 @@ export const resetToInitialData = () => {
   localStorage.setItem(KEYS.BOLETOS, JSON.stringify(INITIAL_BOLETOS));
   localStorage.setItem(KEYS.NFES, JSON.stringify(INITIAL_NFES));
   localStorage.setItem(KEYS.TICKETS, JSON.stringify(INITIAL_TICKETS));
+  localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(INITIAL_SPORADIC_SERVICES));
 };

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification } from './types';
+import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification, SporadicService } from './types';
 import {
   getStoredClients, saveStoredClients,
   getStoredBoletos, saveStoredBoletos,
   getStoredNFes, saveStoredNFes,
   getStoredTickets, saveStoredTickets,
+  getStoredSporadicServices, saveStoredSporadicServices,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
   getStoredSession, saveStoredSession, touchStoredSession,
@@ -23,6 +24,7 @@ import {
   subscribeBoletos,
   subscribeNFes,
   subscribeTickets,
+  subscribeSporadicServices,
   subscribeNotifications,
   subscribeAdminPassword,
   saveClientToFirestore,
@@ -33,6 +35,8 @@ import {
   deleteNFeFromFirestore,
   saveTicketToFirestore,
   deleteTicketFromFirestore,
+  saveSporadicServiceToFirestore,
+  deleteSporadicServiceFromFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
@@ -42,6 +46,7 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { Header } from './components/Header';
 import { LoginView } from './components/LoginView';
 import { EditAdminPasswordModal } from './components/modals/EditAdminPasswordModal';
+import { EditClientPasswordModal } from './components/modals/EditClientPasswordModal';
 
 // Client components
 import { ClientBoletosView } from './components/client/ClientBoletosView';
@@ -68,6 +73,7 @@ export default function App() {
   const [boletos, setBoletos] = useState<Boleto[]>([]);
   const [nfes, setNfes] = useState<NotaFiscal[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [sporadicServices, setSporadicServices] = useState<SporadicService[]>([]);
 
   // Notifications & Push Permission state
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -81,9 +87,10 @@ export default function App() {
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Admin Password state
+  // Password Modals state
   const [adminPassword, setAdminPassword] = useState<string>('admin123');
   const [isEditAdminPasswordModalOpen, setIsEditAdminPasswordModalOpen] = useState<boolean>(false);
+  const [isEditClientPasswordModalOpen, setIsEditClientPasswordModalOpen] = useState<boolean>(false);
 
   // Keep session alive and check 30-min expiration
   useEffect(() => {
@@ -122,6 +129,7 @@ export default function App() {
     setBoletos(loadedBoletos);
     setNfes(getStoredNFes());
     setTickets(getStoredTickets());
+    setSporadicServices(getStoredSporadicServices());
     setAdminPassword(getStoredAdminPassword());
     
     // Check due dates and load notifications
@@ -165,6 +173,10 @@ export default function App() {
         setTickets(tk);
         saveStoredTickets(tk);
       });
+      const unsubSporadic = subscribeSporadicServices((sp) => {
+        setSporadicServices(sp);
+        saveStoredSporadicServices(sp);
+      });
       const unsubNotifs = subscribeNotifications((nt) => {
         setClients((latestClients) => {
           setBoletos((latestBoletos) => {
@@ -183,6 +195,7 @@ export default function App() {
         unsubBoletos();
         unsubNfes();
         unsubTickets();
+        unsubSporadic();
         unsubNotifs();
         unsubAdminPass();
       };
@@ -214,6 +227,50 @@ export default function App() {
     setAdminPassword(newPassword);
     saveStoredAdminPassword(newPassword);
     saveAdminPasswordToFirestore(newPassword);
+  };
+
+  const handleSaveClientPassword = (newPassword: string) => {
+    if (session?.role === 'client' && session.client) {
+      const updatedClient: Client = { ...session.client, password: newPassword };
+      handleUpdateClient(updatedClient);
+      const updatedSession: UserSession = { ...session, client: updatedClient };
+      setSession(updatedSession);
+      saveStoredSession(updatedSession);
+    }
+  };
+
+  // Sporadic Services Handlers
+  const handleAddSporadicService = (serviceData: Omit<SporadicService, 'id' | 'createdAt'>) => {
+    const newService: SporadicService = {
+      ...serviceData,
+      id: `sp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    setSporadicServices((prev) => {
+      const updated = [newService, ...prev];
+      saveStoredSporadicServices(updated);
+      return updated;
+    });
+    saveSporadicServiceToFirestore(newService);
+  };
+
+  const handleUpdateSporadicStatus = (id: string, status: 'realized' | 'pending') => {
+    setSporadicServices((prev) => {
+      const updated = prev.map((s) => (s.id === id ? { ...s, status } : s));
+      saveStoredSporadicServices(updated);
+      const item = updated.find((s) => s.id === id);
+      if (item) saveSporadicServiceToFirestore(item);
+      return updated;
+    });
+  };
+
+  const handleDeleteSporadicService = (id: string) => {
+    setSporadicServices((prev) => {
+      const updated = prev.filter((s) => s.id !== id);
+      saveStoredSporadicServices(updated);
+      return updated;
+    });
+    deleteSporadicServiceFromFirestore(id);
   };
 
   // Login Handlers
@@ -597,6 +654,7 @@ export default function App() {
         }}
         onResetData={handleResetData}
         onOpenEditAdminPassword={() => setIsEditAdminPasswordModalOpen(true)}
+        onOpenEditClientPassword={() => setIsEditClientPasswordModalOpen(true)}
         notifications={notifications}
         pushPermission={pushPermission}
         onRequestPushPermission={handleRequestPushPermission}
@@ -682,7 +740,11 @@ export default function App() {
               <AdminFinancialView
                 clients={clients}
                 boletos={boletos}
+                sporadicServices={sporadicServices}
                 onAddBoleto={handleAddBoleto}
+                onAddSporadicService={handleAddSporadicService}
+                onUpdateSporadicStatus={handleUpdateSporadicStatus}
+                onDeleteSporadicService={handleDeleteSporadicService}
                 onToast={addToast}
               />
             )}
@@ -731,6 +793,16 @@ export default function App() {
         onSavePassword={handleSaveAdminPassword}
         onToast={addToast}
       />
+
+      {session?.role === 'client' && session.client && (
+        <EditClientPasswordModal
+          isOpen={isEditClientPasswordModalOpen}
+          onClose={() => setIsEditClientPasswordModalOpen(false)}
+          client={session.client}
+          onSavePassword={handleSaveClientPassword}
+          onToast={addToast}
+        />
+      )}
 
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
     </div>

@@ -247,15 +247,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <span>Acessar Portal do Cliente</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
-
-                <button
-                  type="button"
-                  onClick={handleForgotPasswordWhatsApp}
-                  className="w-full py-2.5 px-3 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 group"
-                >
-                  <MessageCircle className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                  <span>Esqueceu sua senha? Solicitar via WhatsApp ({COMPANY_WHATSAPP_FORMATTED})</span>
-                </button>
               </div>
             </form>
           ) : !isAdminUnlocked ? (
