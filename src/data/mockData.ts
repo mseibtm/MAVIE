@@ -173,6 +173,10 @@ export const INITIAL_TICKETS: SupportTicket[] = [
     status: 'resolved',
     createdAt: '2026-07-22T09:30:00Z',
     updatedAt: '2026-07-22T10:15:00Z',
+    closureReason: 'duvida_nfe',
+    closureComment: 'Cliente orientada sobre localização da NF-e no portal em PDF. Atendimento via WhatsApp concluído.',
+    closedAt: '2026-07-22T10:15:00Z',
+    closedBy: 'Departamento Fiscal',
     messages: [
       {
         id: 'msg-3',
@@ -188,6 +192,82 @@ export const INITIAL_TICKETS: SupportTicket[] = [
         message: 'Olá Ana! A NF 000.004.901 já está disponível na sua aba de Notas Fiscais no portal para visualização e download em formato oficial.',
         timestamp: '2026-07-22T10:15:00Z',
       },
+    ],
+  },
+  {
+    id: 'tkt-3',
+    clientId: 'cli-3',
+    subject: 'Solicitação de 2ª via de boleto vencido',
+    category: 'financial',
+    priority: 'high',
+    status: 'resolved',
+    createdAt: '2026-07-28T14:10:00Z',
+    updatedAt: '2026-07-28T14:40:00Z',
+    closureReason: 'boleto_segunda_via',
+    closureComment: 'Enviado novo boleto reemitido com nova data no WhatsApp do cliente.',
+    closedAt: '2026-07-28T14:40:00Z',
+    closedBy: 'Suporte Financeiro',
+    messages: [
+      {
+        id: 'msg-5',
+        senderType: 'client',
+        senderName: 'Marcos Vinicius Oliveira',
+        message: 'Perdi a data de pagamento do meu boleto. Podem reemitir uma 2ª via?',
+        timestamp: '2026-07-28T14:10:00Z',
+      },
+      {
+        id: 'msg-6',
+        senderType: 'admin',
+        senderName: 'Suporte Financeiro',
+        message: 'Novo boleto emitido com sucesso e disponibilizado.',
+        timestamp: '2026-07-28T14:40:00Z',
+      }
+    ],
+  },
+  {
+    id: 'tkt-4',
+    clientId: 'cli-1',
+    subject: 'Prorrogação de Vencimento de mensalidade',
+    category: 'financial',
+    priority: 'medium',
+    status: 'resolved',
+    createdAt: '2026-07-15T08:20:00Z',
+    updatedAt: '2026-07-15T09:00:00Z',
+    closureReason: 'prorrogacao_vencimento',
+    closureComment: 'Prorrogação de 5 dias concedida e boleto atualizado.',
+    closedAt: '2026-07-15T09:00:00Z',
+    closedBy: 'Operador Financeiro',
+    messages: [
+      {
+        id: 'msg-7',
+        senderType: 'client',
+        senderName: 'Carlos Alberto Silva',
+        message: 'Solicito prorrogação do vencimento do boleto.',
+        timestamp: '2026-07-15T08:20:00Z',
+      }
+    ],
+  },
+  {
+    id: 'tkt-5',
+    clientId: 'cli-2',
+    subject: 'Acordo financeiro da mensalidade pendente',
+    category: 'financial',
+    priority: 'high',
+    status: 'resolved',
+    createdAt: '2026-07-10T16:00:00Z',
+    updatedAt: '2026-07-10T17:15:00Z',
+    closureReason: 'negociacao_financeira',
+    closureComment: 'Fechado acordo de parcelamento e enviado comprovante via WhatsApp.',
+    closedAt: '2026-07-10T17:15:00Z',
+    closedBy: 'Gestão Financeira',
+    messages: [
+      {
+        id: 'msg-8',
+        senderType: 'client',
+        senderName: 'Ana Maria Souza',
+        message: 'Gostaria de negociar a parcela em aberto.',
+        timestamp: '2026-07-10T16:00:00Z',
+      }
     ],
   },
 ];

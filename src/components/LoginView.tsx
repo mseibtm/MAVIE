@@ -3,6 +3,7 @@ import { User, ShieldCheck, ArrowRight, Lock, AlertCircle, Eye, EyeOff, ShieldAl
 import { Client } from '../types';
 import { formatCPF, cleanCPF } from '../utils/cpf';
 import { MavieLogo } from './MavieLogo';
+import { COMPANY_WHATSAPP_NUMBER, COMPANY_WHATSAPP_FORMATTED } from '../constants';
 
 interface LoginViewProps {
   clients: Client[];
@@ -12,8 +13,7 @@ interface LoginViewProps {
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
-const COMPANY_WHATSAPP_NUMBER = '5549988876236';
-const COMPANY_WHATSAPP_FORMATTED = '+55 49 98887-6236';
+
 
 export const LoginView: React.FC<LoginViewProps> = ({
   clients,

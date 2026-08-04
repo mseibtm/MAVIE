@@ -7,6 +7,7 @@ interface NotificationBellProps {
   session: UserSession | null;
   pushPermission: NotificationPermission;
   onRequestPushPermission: () => void;
+  onSendTestNotification?: () => void;
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onClearAll: () => void;
@@ -17,6 +18,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   session,
   pushPermission,
   onRequestPushPermission,
+  onSendTestNotification,
   onMarkAsRead,
   onMarkAllAsRead,
   onClearAll,
@@ -127,24 +129,53 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
             </div>
           </div>
 
-          {/* Browser Push Permission Alert Banner */}
-          {pushPermission !== 'granted' && (
-            <div className="p-3 bg-amber-950/60 border-b border-amber-800/60 flex flex-col gap-2">
-              <div className="flex items-start gap-2 text-xs text-amber-200">
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <span>
-                  Receba <strong>Alertas Push do Navegador</strong> na criação de novos boletos e na data de vencimento.
-                </span>
+          {/* Browser Push Permission & Quick Test Action Banner */}
+          <div className="p-3 bg-amber-950/40 border-b border-amber-800/40 flex flex-col gap-2">
+            {pushPermission !== 'granted' ? (
+              <>
+                <div className="flex items-start gap-2 text-xs text-amber-200">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    Receba <strong>Alertas Push do Navegador</strong> na criação de novos boletos e na data de vencimento.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={onRequestPushPermission}
+                    className="flex-1 py-1.5 px-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Ativar Alertas Push</span>
+                  </button>
+                  {onSendTestNotification && (
+                    <button
+                      onClick={onSendTestNotification}
+                      className="py-1.5 px-2.5 bg-zinc-800 hover:bg-zinc-700 text-amber-300 font-bold text-[11px] rounded-lg transition-colors border border-amber-500/30"
+                      title="Testar notificação"
+                    >
+                      Testar
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Alertas Push Ativos</span>
+                </div>
+                {onSendTestNotification && (
+                  <button
+                    onClick={onSendTestNotification}
+                    className="py-1 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] rounded-lg transition-colors border border-amber-500/30 flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Disparar Notificação de Teste</span>
+                  </button>
+                )}
               </div>
-              <button
-                onClick={onRequestPushPermission}
-                className="w-full py-1.5 px-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <Bell className="w-3.5 h-3.5" />
-                <span>Ativar Notificações Push no Navegador</span>
-              </button>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Notification List */}
           <div className="overflow-y-auto divide-y divide-zinc-900 flex-1 min-h-[160px] max-h-[380px]">

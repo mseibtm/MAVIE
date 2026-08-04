@@ -15,6 +15,7 @@ interface HeaderProps {
   notifications?: AppNotification[];
   pushPermission?: NotificationPermission;
   onRequestPushPermission?: () => void;
+  onSendTestNotification?: () => void;
   onMarkNotificationAsRead?: (id: string) => void;
   onMarkAllNotificationsAsRead?: () => void;
   onClearAllNotifications?: () => void;
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   notifications = [],
   pushPermission = 'default',
   onRequestPushPermission = () => {},
+  onSendTestNotification,
   onMarkNotificationAsRead = () => {},
   onMarkAllNotificationsAsRead = () => {},
   onClearAllNotifications = () => {},
@@ -168,6 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
               session={session}
               pushPermission={pushPermission}
               onRequestPushPermission={onRequestPushPermission}
+              onSendTestNotification={onSendTestNotification}
               onMarkAsRead={onMarkNotificationAsRead}
               onMarkAllAsRead={onMarkAllNotificationsAsRead}
               onClearAll={onClearAllNotifications}

@@ -78,6 +78,12 @@ export interface SupportTicket {
   createdAt: string;
   updatedAt: string;
   messages: TicketMessage[];
+  // Campos de encerramento de atendimento e WhatsApp
+  closureReason?: string;
+  closureComment?: string;
+  whatsappScreenshot?: string;
+  closedAt?: string;
+  closedBy?: string;
 }
 
 export interface AppNotification {

@@ -28,7 +28,28 @@ export async function requestPushPermission(): Promise<NotificationPermission> {
  * Send browser native Push Notification
  */
 export function sendNativePush(title: string, body: string, tag?: string) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        try {
+          new Notification(title, {
+            body,
+            tag: tag || `mavie-notif-${Date.now()}`,
+            requireInteraction: false,
+          });
+        } catch (e) {
+          console.warn('Erro ao criar notificação nativa:', e);
+        }
+      }
+    });
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
     return;
   }
 
@@ -36,13 +57,11 @@ export function sendNativePush(title: string, body: string, tag?: string) {
     const options: NotificationOptions = {
       body,
       tag: tag || `mavie-notif-${Date.now()}`,
-      badge: '/vite.svg',
-      icon: '/vite.svg',
       requireInteraction: false,
     };
     new Notification(title, options);
   } catch (e) {
-    console.error('Erro ao enviar notificação push nativa:', e);
+    console.warn('Erro ao enviar notificação push nativa:', e);
   }
 }
 
@@ -93,6 +112,11 @@ export function cleanupOrphanNotifications(
   clients: Client[],
   boletos: Boleto[]
 ): AppNotification[] {
+  // CRITICAL SAFETY GUARD: If clients have not loaded into state yet, do NOT delete any notifications!
+  if (!clients || clients.length === 0) {
+    return notifications;
+  }
+
   const validClientIds = new Set(clients.map((c) => c.id));
   const validBoletoIds = new Set(boletos.map((b) => b.id));
 

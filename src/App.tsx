@@ -343,14 +343,52 @@ export default function App() {
     }
   };
 
+  const handleSendTestNotification = () => {
+    const title = 'Notificação de Teste';
+    const body = 'O sistema de alertas e notificações da Mavie Solution está funcionando perfeitamente!';
+
+    // Send browser native push
+    sendNativePush(`Mavie Solution - ${title}`, body, `test-notif-${Date.now()}`);
+
+    // Create in-app notification record
+    const targetClientId = session?.role === 'client' && session.client ? session.client.id : (clients[0]?.id || 'cli-1');
+    const newNotif: AppNotification = {
+      id: `notif-test-${Date.now()}`,
+      title,
+      body,
+      type: 'boleto_created',
+      clientId: targetClientId,
+      read: false,
+      timestamp: new Date().toISOString(),
+    };
+
+    const updated = [newNotif, ...notifications];
+    setNotifications(updated);
+    saveStoredNotifications(updated);
+    saveNotificationToFirestore(newNotif);
+
+    addToast('success', 'Notificação Disparada!', 'Uma notificação de teste foi gerada e enviada.');
+  };
+
   const handleMarkNotificationAsRead = (id: string) => {
-    const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
+    const updated = notifications.map((n) => {
+      if (n.id === id) {
+        const updatedN = { ...n, read: true };
+        saveNotificationToFirestore(updatedN);
+        return updatedN;
+      }
+      return n;
+    });
     setNotifications(updated);
     saveStoredNotifications(updated);
   };
 
   const handleMarkAllNotificationsAsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }));
+    const updated = notifications.map((n) => {
+      const updatedN = { ...n, read: true };
+      saveNotificationToFirestore(updatedN);
+      return updatedN;
+    });
     setNotifications(updated);
     saveStoredNotifications(updated);
   };
@@ -508,6 +546,41 @@ export default function App() {
     }
   };
 
+  const handleCloseTicket = (
+    ticketId: string,
+    closureData: {
+      reason: string;
+      comment: string;
+      whatsappScreenshot?: string;
+      closedBy: string;
+      status: TicketStatus;
+    }
+  ) => {
+    const now = new Date().toISOString();
+    let updatedTicket: SupportTicket | undefined;
+    const updated = tickets.map((t) => {
+      if (t.id === ticketId) {
+        updatedTicket = {
+          ...t,
+          status: closureData.status,
+          closureReason: closureData.reason,
+          closureComment: closureData.comment,
+          whatsappScreenshot: closureData.whatsappScreenshot,
+          closedAt: now,
+          closedBy: closureData.closedBy,
+          updatedAt: now,
+        };
+        return updatedTicket;
+      }
+      return t;
+    });
+    setTickets(updated);
+    saveStoredTickets(updated);
+    if (updatedTicket) {
+      saveTicketToFirestore(updatedTicket);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-slate-100 font-sans selection:bg-amber-500 selection:text-black flex flex-col">
       <Header
@@ -527,6 +600,7 @@ export default function App() {
         notifications={notifications}
         pushPermission={pushPermission}
         onRequestPushPermission={handleRequestPushPermission}
+        onSendTestNotification={handleSendTestNotification}
         onMarkNotificationAsRead={handleMarkNotificationAsRead}
         onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
         onClearAllNotifications={handleClearAllNotifications}
@@ -642,6 +716,7 @@ export default function App() {
                 tickets={tickets}
                 onAddMessage={handleAddTicketMessage}
                 onUpdateTicketStatus={handleUpdateTicketStatus}
+                onCloseTicket={handleCloseTicket}
                 onToast={addToast}
               />
             )}
