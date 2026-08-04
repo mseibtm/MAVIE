@@ -65,6 +65,11 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
       return;
     }
 
+    if (!pdfFile) {
+      onToast('error', 'Arquivo PDF Obrigatório', 'Faça o upload do arquivo PDF da Nota Fiscal para concluir a inserção.');
+      return;
+    }
+
     onAddNFe({
       clientId: formClientId,
       number: nfNumber.trim(),
@@ -78,7 +83,7 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
     });
 
     const targetClient = clients.find(c => c.id === formClientId);
-    onToast('success', 'Nota Fiscal Emitida!', `NF-e ${nfNumber} vinculada com sucesso a ${targetClient?.name || 'Cliente'}.`);
+    onToast('success', 'Nota Fiscal Inserida!', `NF-e ${nfNumber} com PDF anexado e vinculada a ${targetClient?.name || 'Cliente'}.`);
     setIsModalOpen(false);
   };
 
@@ -124,7 +129,7 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Cadastrar Nova NF-e</span>
+          <span>Inserir Arquivo NF-e (PDF)</span>
         </button>
       </div>
 

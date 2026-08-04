@@ -34,50 +34,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-500/20 rounded-2xl border border-amber-500/30 text-amber-400">
-              <ShieldCheck className="w-8 h-8" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider mb-0.5">
-                Painel Administrativo Mavie Solution
-              </div>
-              <h1 className="text-2xl font-black text-white">Visão Geral da Operação</h1>
-              <p className="text-xs text-slate-300 mt-1">
-                Controle de clientes efetivos, mensalidades, boletos com PDF, notas fiscais e chamados de suporte.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+      {/* Compact Top Action Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+        <div className="flex items-center gap-2 px-2">
+          <ShieldCheck className="w-5 h-5 text-amber-400" />
+          <span className="text-sm font-bold text-white">Visão Geral da Operação</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onNavigate('clients')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs rounded-xl shadow-sm transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Novo Cliente</span>
+          </button>
+          <button
+            onClick={() => onNavigate('admin-financial')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-colors"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Menu Financeiro</span>
+          </button>
+          {onOpenEditAdminPassword && (
             <button
-              onClick={() => onNavigate('clients')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all"
+              onClick={onOpenEditAdminPassword}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/30 transition-colors"
+              title="Alterar Senha do Administrador"
             >
-              <Plus className="w-4 h-4" />
-              <span>Novo Cliente (CPF)</span>
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span>Alterar Senha</span>
             </button>
-            <button
-              onClick={() => onNavigate('admin-financial')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-colors"
-            >
-              <TrendingUp className="w-4 h-4" />
-              <span>Menu Financeiro</span>
-            </button>
-            {onOpenEditAdminPassword && (
-              <button
-                onClick={onOpenEditAdminPassword}
-                className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/30 transition-colors"
-                title="Alterar Senha do Administrador"
-              >
-                <KeyRound className="w-4 h-4 text-amber-400" />
-                <span>Alterar Senha</span>
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 

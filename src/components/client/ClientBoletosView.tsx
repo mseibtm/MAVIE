@@ -17,6 +17,7 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
   onToast,
 }) => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
+  const [issueDateFilter, setIssueDateFilter] = useState<string>('');
   const [selectedBoleto, setSelectedBoleto] = useState<Boleto | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [uploadingBoletoId, setUploadingBoletoId] = useState<string | null>(null);
@@ -27,8 +28,9 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
   const clientBoletos = boletos.filter((b) => b.clientId === client.id);
 
   const filteredBoletos = clientBoletos.filter((b) => {
-    if (filter === 'all') return true;
-    return b.status === filter;
+    const matchStatus = filter === 'all' ? true : b.status === filter;
+    const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
+    return matchStatus && matchIssueDate;
   });
 
   const pendingTotal = clientBoletos
@@ -176,7 +178,7 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 p-2 rounded-2xl border border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-3 rounded-2xl border border-slate-800">
         <div className="flex items-center gap-1 overflow-x-auto">
           <button
             onClick={() => setFilter('all')}
@@ -218,6 +220,25 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
           >
             Pagos ({clientBoletos.filter(b => b.status === 'paid').length})
           </button>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Filtrar Emissão:</span>
+          <input
+            type="date"
+            value={issueDateFilter}
+            onChange={(e) => setIssueDateFilter(e.target.value)}
+            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
+          />
+          {issueDateFilter && (
+            <button
+              type="button"
+              onClick={() => setIssueDateFilter('')}
+              className="px-2 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700"
+            >
+              Limpar
+            </button>
+          )}
         </div>
       </div>
 
@@ -273,6 +294,11 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                     <h3 className="text-base font-bold text-white">{boleto.description}</h3>
 
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-amber-400" />
+                        Emissão: <strong className="text-amber-300 font-semibold">{new Date(boleto.createdAt).toLocaleDateString('pt-BR')}</strong>
+                      </span>
+
                       <span className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-sky-400" />
                         Vencimento: <strong className="text-slate-200">{formattedDueDate}</strong>

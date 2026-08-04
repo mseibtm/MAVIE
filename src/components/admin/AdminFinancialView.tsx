@@ -48,39 +48,6 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  // Auto batch generation of boletos for current month
-  const handleBatchGenerateBoletos = () => {
-    let generatedCount = 0;
-    const currentMonthYear = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    const dueDate = new Date();
-    dueDate.setDate(15); // Default due on 15th
-    const dueDateStr = dueDate.toISOString().split('T')[0];
-
-    activeClients.forEach((client) => {
-      // Check if client already has a pending boleto for this month
-      const hasBoleto = boletos.some(b => b.clientId === client.id && b.status === 'pending');
-      if (!hasBoleto && client.monthlyFee > 0) {
-        onAddBoleto({
-          clientId: client.id,
-          description: `Mensalidade Contratada Mavie Solution — ${currentMonthYear}`,
-          amount: client.monthlyFee,
-          dueDate: dueDateStr,
-          status: 'pending',
-          lineDigitable: '34191.80007 01234.567890 12345.678901 8 91230000' + Math.floor(client.monthlyFee * 100),
-          pixKey: `00020126580014br.gov.bcb.pix0136${Math.random().toString(36).substring(2)}5204000053039865407${client.monthlyFee}5802BR5915MAVIE SOLUTION6009SAO PAULO`,
-          barcode: '3419180007012345678901234567890189123' + Math.floor(client.monthlyFee * 100),
-        });
-        generatedCount++;
-      }
-    });
-
-    if (generatedCount > 0) {
-      onToast('success', 'Lote de Boletos Gerado!', `${generatedCount} novos boletos recorrentes foram criados para os clientes ativos.`);
-    } else {
-      onToast('info', 'Boletos em dia', 'Todos os clientes ativos já possuem boletos pendentes emitidos.');
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -95,14 +62,6 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
             Métricas de receita recorrente mensal (MRR), faturamento realizado, boletos em aberto e taxa de inadimplência.
           </p>
         </div>
-
-        <button
-          onClick={handleBatchGenerateBoletos}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition-all shrink-0"
-        >
-          <PlusCircle className="w-4 h-4" />
-          <span>Emitir Boletos Recorrentes (Lote)</span>
-        </button>
       </div>
 
       {/* Primary KPI Cards Grid */}

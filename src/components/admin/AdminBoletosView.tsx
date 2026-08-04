@@ -26,6 +26,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
 }) => {
   const [selectedClientId, setSelectedClientId] = useState<string>(initialSelectedClientId);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [issueDateFilter, setIssueDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingBoleto, setViewingBoleto] = useState<Boleto | null>(null);
@@ -108,6 +109,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   const filteredBoletos = boletos.filter((b) => {
     const matchClient = selectedClientId ? b.clientId === selectedClientId : true;
     const matchStatus = statusFilter === 'all' ? true : b.status === statusFilter;
+    const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
     const client = clients.find(c => c.id === b.clientId);
     const matchSearch =
       b.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,7 +117,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       (client && client.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (client && client.cpf.includes(searchTerm));
 
-    return matchClient && matchStatus && matchSearch;
+    return matchClient && matchStatus && matchIssueDate && matchSearch;
   });
 
   const formatCurrency = (val: number) =>
@@ -146,7 +148,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800">
         <div>
           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
             Filtrar por Cliente
@@ -179,6 +181,30 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
             <option value="paid">Pago</option>
             <option value="overdue">Em atraso</option>
           </select>
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            Data de Emissão
+          </label>
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={issueDateFilter}
+              onChange={(e) => setIssueDateFilter(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
+            />
+            {issueDateFilter && (
+              <button
+                type="button"
+                onClick={() => setIssueDateFilter('')}
+                className="px-2 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 shrink-0"
+                title="Limpar Data"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
 
         <div>
@@ -248,6 +274,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                   <h4 className="text-sm font-bold text-white">{boleto.description}</h4>
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                    <span>Emissão: <strong className="text-amber-300 font-semibold">{new Date(boleto.createdAt).toLocaleDateString('pt-BR')}</strong></span>
                     <span>Vencimento: <strong className="text-slate-200">{formattedDueDate}</strong></span>
                     <span>Valor: <strong className="text-white font-bold">{formatCurrency(boleto.amount)}</strong></span>
                   </div>
