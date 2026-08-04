@@ -29,24 +29,11 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
 
   // Form states
   const [formClientId, setFormClientId] = useState('');
-  const [nfNumber, setNfNumber] = useState('');
-  const [series, setSeries] = useState('1');
-  const [amount, setAmount] = useState('');
-  const [issueDate, setIssueDate] = useState('');
-  const [description, setDescription] = useState('');
-  const [accessKey, setAccessKey] = useState('');
   const [pdfFile, setPdfFile] = useState<PDFAttachment | undefined>(undefined);
 
   const openNewNFeModal = () => {
     const firstClient = clients[0];
     setFormClientId(firstClient?.id || '');
-    const nextNum = (nfes.length + 4895).toString().padStart(9, '0');
-    setNfNumber(`000.${nextNum.slice(3, 6)}.${nextNum.slice(6, 9)}`);
-    setSeries('1');
-    setAmount((firstClient?.monthlyFee || 1450).toString());
-    setIssueDate(new Date().toISOString().split('T')[0]);
-    setDescription('Prestação de serviços de consultoria em tecnologia, manutenção de sistemas e suporte técnico especializado.');
-    setAccessKey(generateNFeAccessKey());
     setPdfFile(undefined);
     setIsModalOpen(true);
   };
@@ -54,14 +41,8 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const numericAmount = parseFloat(amount.replace(',', '.'));
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      onToast('error', 'Valor Inválido', 'Informe um valor numérico positivo para a Nota Fiscal.');
-      return;
-    }
-
     if (!formClientId) {
-      onToast('error', 'Selecione o Cliente', 'Selecione um cliente para a nota.');
+      onToast('error', 'Selecione o Cliente', 'Selecione um cliente para vincular a nota fiscal.');
       return;
     }
 
@@ -70,20 +51,27 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
       return;
     }
 
+    const targetClient = clients.find(c => c.id === formClientId);
+    const nextSeq = (nfes.length + 4895).toString().padStart(9, '0');
+    const autoNumber = `000.${nextSeq.slice(3, 6)}.${nextSeq.slice(6, 9)}`;
+    const autoIssueDate = new Date().toISOString().split('T')[0];
+    const autoAmount = targetClient?.monthlyFee || 1450;
+    const autoDescription = pdfFile.fileName ? `Nota Fiscal — ${pdfFile.fileName}` : 'Nota Fiscal de Serviço em PDF';
+    const autoAccessKey = generateNFeAccessKey();
+
     onAddNFe({
       clientId: formClientId,
-      number: nfNumber.trim(),
-      series: series.trim() || '1',
-      issueDate,
-      amount: numericAmount,
-      description: description.trim(),
-      accessKey: accessKey || generateNFeAccessKey(),
+      number: autoNumber,
+      series: '1',
+      issueDate: autoIssueDate,
+      amount: autoAmount,
+      description: autoDescription,
+      accessKey: autoAccessKey,
       status: 'issued',
       pdfFile,
     });
 
-    const targetClient = clients.find(c => c.id === formClientId);
-    onToast('success', 'Nota Fiscal Inserida!', `NF-e ${nfNumber} com PDF anexado e vinculada a ${targetClient?.name || 'Cliente'}.`);
+    onToast('success', 'Nota Fiscal Inserida!', `Arquivo PDF anexado com sucesso para ${targetClient?.name || 'o cliente'}.`);
     setIsModalOpen(false);
   };
 
@@ -266,13 +254,7 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
                 </label>
                 <select
                   value={formClientId}
-                  onChange={(e) => {
-                    setFormClientId(e.target.value);
-                    const selected = clients.find(c => c.id === e.target.value);
-                    if (selected && selected.monthlyFee) {
-                      setAmount(selected.monthlyFee.toString());
-                    }
-                  }}
+                  onChange={(e) => setFormClientId(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
                   required
                 >
@@ -284,96 +266,13 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Número da NF-e *
-                  </label>
-                  <input
-                    type="text"
-                    value={nfNumber}
-                    onChange={(e) => setNfNumber(e.target.value)}
-                    placeholder="000.004.892"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Série *
-                  </label>
-                  <input
-                    type="text"
-                    value={series}
-                    onChange={(e) => setSeries(e.target.value)}
-                    placeholder="1"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Valor Total R$ *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="1450.00"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Data de Emissão *
-                  </label>
-                  <input
-                    type="date"
-                    value={issueDate}
-                    onChange={(e) => setIssueDate(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Descrição dos Serviços Prestados *
-                </label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Detalhamento do serviço prestado para o documento fiscal..."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  required
-                />
-              </div>
-
               {/* PDF Uploader */}
               <PDFUploader
                 currentFile={pdfFile}
                 onFileChange={setPdfFile}
-                label="Upload do PDF da Nota Fiscal (DANFE Oficial)"
+                label="Upload do PDF da Nota Fiscal (DANFE Oficial) *"
                 onToast={onToast}
               />
-
-              <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Chave de Acesso (44 dígitos)
-                </label>
-                <code className="block p-2 bg-slate-950 border border-slate-800 rounded-xl text-amber-400 font-mono text-[11px] break-all">
-                  {accessKey}
-                </code>
-              </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">
                 <button
@@ -387,7 +286,7 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/20"
                 >
-                  Emitir e Salvar NF-e
+                  Salvar e Anexar NF-e
                 </button>
               </div>
             </form>
