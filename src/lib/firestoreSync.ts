@@ -20,6 +20,22 @@ const COLS = {
   NOTIFICATIONS: 'notifications',
 };
 
+// Helper to recursively remove undefined fields so Firestore setDoc does not throw errors
+function removeUndefinedFields<T extends Record<string, any>>(obj: T): T {
+  const newObj: Record<string, any> = {};
+  Object.keys(obj).forEach((key) => {
+    const value = obj[key];
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        newObj[key] = removeUndefinedFields(value);
+      } else {
+        newObj[key] = value;
+      }
+    }
+  });
+  return newObj as T;
+}
+
 /**
  * Sync initial seed data to Firestore if collection is empty
  */
@@ -30,16 +46,16 @@ export async function seedFirestoreIfEmpty() {
       const batch = writeBatch(db);
       
       INITIAL_CLIENTS.forEach((c) => {
-        batch.set(doc(db, COLS.CLIENTS, c.id), c);
+        batch.set(doc(db, COLS.CLIENTS, c.id), removeUndefinedFields(c));
       });
       INITIAL_BOLETOS.forEach((b) => {
-        batch.set(doc(db, COLS.BOLETOS, b.id), b);
+        batch.set(doc(db, COLS.BOLETOS, b.id), removeUndefinedFields(b));
       });
       INITIAL_NFES.forEach((n) => {
-        batch.set(doc(db, COLS.NFES, n.id), n);
+        batch.set(doc(db, COLS.NFES, n.id), removeUndefinedFields(n));
       });
       INITIAL_TICKETS.forEach((t) => {
-        batch.set(doc(db, COLS.TICKETS, t.id), t);
+        batch.set(doc(db, COLS.TICKETS, t.id), removeUndefinedFields(t));
       });
 
       await batch.commit();
@@ -133,7 +149,7 @@ export function subscribeAdminPassword(callback: (pass: string) => void) {
  */
 export async function saveClientToFirestore(client: Client) {
   try {
-    await setDoc(doc(db, COLS.CLIENTS, client.id), client, { merge: true });
+    await setDoc(doc(db, COLS.CLIENTS, client.id), removeUndefinedFields(client), { merge: true });
   } catch (err) {
     console.error('Error saving client to Firestore:', err);
   }
@@ -164,7 +180,7 @@ export async function saveBoletoToFirestore(boleto: Boleto) {
       };
     }
 
-    await setDoc(doc(db, COLS.BOLETOS, boleto.id), docToSave as Boleto, { merge: true });
+    await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving boleto to Firestore:', err);
   }
@@ -204,7 +220,7 @@ export async function deleteTicketFromFirestore(id: string) {
 
 export async function saveNFeToFirestore(nfe: NotaFiscal) {
   try {
-    await setDoc(doc(db, COLS.NFES, nfe.id), nfe, { merge: true });
+    await setDoc(doc(db, COLS.NFES, nfe.id), removeUndefinedFields(nfe), { merge: true });
   } catch (err) {
     console.error('Error saving NFe to Firestore:', err);
   }
@@ -212,7 +228,7 @@ export async function saveNFeToFirestore(nfe: NotaFiscal) {
 
 export async function saveTicketToFirestore(ticket: SupportTicket) {
   try {
-    await setDoc(doc(db, COLS.TICKETS, ticket.id), ticket, { merge: true });
+    await setDoc(doc(db, COLS.TICKETS, ticket.id), removeUndefinedFields(ticket), { merge: true });
   } catch (err) {
     console.error('Error saving ticket to Firestore:', err);
   }
@@ -220,7 +236,7 @@ export async function saveTicketToFirestore(ticket: SupportTicket) {
 
 export async function saveNotificationToFirestore(notif: AppNotification) {
   try {
-    await setDoc(doc(db, COLS.NOTIFICATIONS, notif.id), notif, { merge: true });
+    await setDoc(doc(db, COLS.NOTIFICATIONS, notif.id), removeUndefinedFields(notif), { merge: true });
   } catch (err) {
     console.error('Error saving notification to Firestore:', err);
   }
