@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2, ExternalLink, FileCode } from 'lucide-react';
 import { Boleto, Client, PDFAttachment } from '../../types';
-import { formatCPF } from '../../utils/cpf';
+import { formatCPF, cleanCPF } from '../../utils/cpf';
 
 interface BoletoModalProps {
   boleto: Boleto;
@@ -25,7 +25,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
   const [activeModalTab, setActiveModalTab] = useState<'pdf' | 'digital'>(boleto.pdfFile ? 'pdf' : 'digital');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const pixCNPJKey = '32.922.555/0001-87';
+  const pixCNPJKey = '35.798.372/0001-90';
 
   const handleCopyPix = () => {
     onCopyPix(pixCNPJKey);
@@ -71,6 +71,8 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
   }).format(boleto.amount);
 
   const formattedDueDate = new Date(boleto.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');
+  const isCNPJ = client ? cleanCPF(client.cpf).length > 11 : false;
+  const docLabel = isCNPJ ? 'CNPJ' : 'CPF';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/75 backdrop-blur-sm overflow-y-auto">
@@ -374,7 +376,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
               <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Pagador (Sacado)</div>
               <div className="font-bold text-slate-900">{client ? client.name : 'Cliente Registrado'}</div>
               <div className="text-slate-600">
-                {client ? `${client.cpf.replace(/\D/g, '').length > 11 ? 'CNPJ' : 'CPF'}: ${formatCPF(client.cpf)}` : 'Não informado'}
+                {client ? `${docLabel}: ${formatCPF(client.cpf)}` : 'Não informado'}
               </div>
               {client?.address && <div className="text-slate-500 text-[11px] mt-0.5">{client.address}</div>}
             </div>
@@ -390,6 +392,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                 ))}
               </div>
               <span className="font-mono text-[10px] text-slate-500 mt-1">{boleto.barcode}</span>
+            </div>
             </div>
           </div>
           )}

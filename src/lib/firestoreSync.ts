@@ -226,6 +226,14 @@ export async function saveNotificationToFirestore(notif: AppNotification) {
   }
 }
 
+export async function deleteNotificationFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.NOTIFICATIONS, id));
+  } catch (err) {
+    console.error('Error deleting notification from Firestore:', err);
+  }
+}
+
 export async function saveAdminPasswordToFirestore(password: string) {
   try {
     await setDoc(doc(db, 'settings', 'admin'), { password, updatedAt: new Date().toISOString() }, { merge: true });

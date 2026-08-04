@@ -1,6 +1,6 @@
 import { Boleto, Client, AppNotification } from '../types';
 import { getStoredNotifications, saveStoredNotifications } from './storage';
-import { saveNotificationToFirestore } from '../lib/firestoreSync';
+import { saveNotificationToFirestore, deleteNotificationFromFirestore } from '../lib/firestoreSync';
 
 /**
  * Request permission for Browser Push Notifications
@@ -86,6 +86,36 @@ export function notifyNewBoletoCreated(
 }
 
 /**
+ * Clean up notifications that belong to deleted clients or deleted boletos
+ */
+export function cleanupOrphanNotifications(
+  notifications: AppNotification[],
+  clients: Client[],
+  boletos: Boleto[]
+): AppNotification[] {
+  const validClientIds = new Set(clients.map((c) => c.id));
+  const validBoletoIds = new Set(boletos.map((b) => b.id));
+
+  const orphanIds: string[] = [];
+  const cleaned = notifications.filter((n) => {
+    const isClientValid = !n.clientId || validClientIds.has(n.clientId);
+    const isBoletoValid = !n.boletoId || validBoletoIds.has(n.boletoId);
+    if (!isClientValid || !isBoletoValid) {
+      orphanIds.push(n.id);
+      return false;
+    }
+    return true;
+  });
+
+  if (orphanIds.length > 0) {
+    saveStoredNotifications(cleaned);
+    orphanIds.forEach((id) => deleteNotificationFromFirestore(id));
+  }
+
+  return cleaned;
+}
+
+/**
  * Check boletos for due dates (today or overdue) and trigger notifications
  */
 export function checkAndNotifyDueBoletos(
@@ -95,13 +125,17 @@ export function checkAndNotifyDueBoletos(
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   
-  const existingNotifications = getStoredNotifications();
+  const rawNotifications = getStoredNotifications();
+  // Filter out any orphans first
+  const existingNotifications = cleanupOrphanNotifications(rawNotifications, clients, boletos);
+
   const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+  const validClientIds = new Set(clients.map((c) => c.id));
   const newlyCreatedNotifications: AppNotification[] = [];
 
   boletos.forEach((boleto) => {
-    // Only check unpaid boletos
-    if (boleto.status === 'paid') return;
+    // Only check unpaid boletos for valid existing clients
+    if (boleto.status === 'paid' || !validClientIds.has(boleto.clientId)) return;
 
     const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boleto.amount);
     const clientName = clientMap.get(boleto.clientId) || 'Cliente';

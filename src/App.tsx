@@ -14,6 +14,7 @@ import {
   requestPushPermission,
   notifyNewBoletoCreated,
   checkAndNotifyDueBoletos,
+  cleanupOrphanNotifications,
   sendNativePush
 } from './utils/notificationService';
 import {
@@ -33,6 +34,7 @@ import {
   saveTicketToFirestore,
   deleteTicketFromFirestore,
   saveNotificationToFirestore,
+  deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
 } from './lib/firestoreSync';
 
@@ -164,8 +166,15 @@ export default function App() {
         saveStoredTickets(tk);
       });
       const unsubNotifs = subscribeNotifications((nt) => {
-        setNotifications(nt);
-        saveStoredNotifications(nt);
+        setClients((latestClients) => {
+          setBoletos((latestBoletos) => {
+            const cleaned = cleanupOrphanNotifications(nt, latestClients, latestBoletos);
+            setNotifications(cleaned);
+            saveStoredNotifications(cleaned);
+            return latestBoletos;
+          });
+          return latestClients;
+        });
       });
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
 
@@ -182,9 +191,10 @@ export default function App() {
 
   // Effect to re-check due boletos periodically (e.g., when boletos state updates)
   useEffect(() => {
-    if (boletos.length > 0 && clients.length > 0) {
+    if (clients.length > 0) {
       const updatedNotifs = checkAndNotifyDueBoletos(boletos, clients);
-      setNotifications(updatedNotifs);
+      const cleaned = cleanupOrphanNotifications(updatedNotifs, clients, boletos);
+      setNotifications(cleaned);
     }
   }, [boletos, clients]);
 
@@ -267,6 +277,7 @@ export default function App() {
 
     // Remove associated boletos, NFs, tickets
     const clientBoletos = boletos.filter((b) => b.clientId === clientId);
+    const deletedBoletoIds = new Set(clientBoletos.map((b) => b.id));
     clientBoletos.forEach((b) => deleteBoletoFromFirestore(b.id));
     const updatedBoletos = boletos.filter((b) => b.clientId !== clientId);
     setBoletos(updatedBoletos);
@@ -283,6 +294,17 @@ export default function App() {
     const updatedTickets = tickets.filter((t) => t.clientId !== clientId);
     setTickets(updatedTickets);
     saveStoredTickets(updatedTickets);
+
+    // Remove associated notifications for deleted client or its boletos
+    const removedNotifs = notifications.filter(
+      (n) => n.clientId === clientId || (n.boletoId && deletedBoletoIds.has(n.boletoId))
+    );
+    removedNotifs.forEach((n) => deleteNotificationFromFirestore(n.id));
+    const updatedNotifs = notifications.filter(
+      (n) => n.clientId !== clientId && (!n.boletoId || !deletedBoletoIds.has(n.boletoId))
+    );
+    setNotifications(updatedNotifs);
+    saveStoredNotifications(updatedNotifs);
   };
 
   // Boleto CRUD
@@ -334,6 +356,7 @@ export default function App() {
   };
 
   const handleClearAllNotifications = () => {
+    notifications.forEach((n) => deleteNotificationFromFirestore(n.id));
     setNotifications([]);
     saveStoredNotifications([]);
   };
@@ -382,6 +405,12 @@ export default function App() {
     setBoletos(updated);
     saveStoredBoletos(updated);
     deleteBoletoFromFirestore(boletoId);
+
+    const removedNotifs = notifications.filter((n) => n.boletoId === boletoId);
+    removedNotifs.forEach((n) => deleteNotificationFromFirestore(n.id));
+    const updatedNotifs = notifications.filter((n) => n.boletoId !== boletoId);
+    setNotifications(updatedNotifs);
+    saveStoredNotifications(updatedNotifs);
   };
 
   // NF-e CRUD
