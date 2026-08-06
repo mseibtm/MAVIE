@@ -46,10 +46,19 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     setFormClientId(initialId);
     setDescription('Serviços Prestados - Ref. Mês Vigente');
     setAmount(initialClient?.monthlyFee ? String(initialClient.monthlyFee) : '0.00');
-    // Default due date: +10 days
-    const nextTenDays = new Date();
-    nextTenDays.setDate(nextTenDays.getDate() + 10);
-    setDueDate(nextTenDays.toISOString().split('T')[0]);
+    // Default due date: Day 10 of current/next month
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth(); // 0-indexed
+    if (now.getDate() > 10) {
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+    }
+    const monthStr = String(month + 1).padStart(2, '0');
+    setDueDate(`${year}-${monthStr}-10`);
     setStatus('pending');
     setCustomLine(generateDigitableLine());
     setPdfFile(undefined);
