@@ -7,7 +7,7 @@ import { NotificationBell } from './notifications/NotificationBell';
 interface HeaderProps {
   session: UserSession | null;
   onLogout: () => void;
-  onSwitchRole: () => void;
+  onOpenAdminLogin: () => void;
   activeTab: string;
   onTabChange: (tab: string) => void;
   onResetData?: () => void;
@@ -25,7 +25,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   session,
   onLogout,
-  onSwitchRole,
+  onOpenAdminLogin,
   activeTab,
   onTabChange,
   onResetData,
@@ -220,6 +220,17 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
+                {session.role === 'client' && (
+                  <button
+                    onClick={onOpenAdminLogin}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg transition-colors shadow-sm"
+                    title="Acessar Painel de Gestão"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Painel de Gestão</span>
+                  </button>
+                )}
+
                 <button
                   onClick={onLogout}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-rose-950 hover:text-rose-200 text-slate-300 rounded-lg transition-colors border border-slate-700"
@@ -231,8 +242,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             ) : (
               <button
-                onClick={onSwitchRole}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg transition-colors shadow-sm"
+                onClick={onOpenAdminLogin}
+                className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg transition-all shadow-sm"
               >
                 <ShieldCheck className="w-4 h-4" />
                 <span>Painel de Gestão</span>

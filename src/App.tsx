@@ -47,6 +47,7 @@ import { Header } from './components/Header';
 import { LoginView } from './components/LoginView';
 import { EditAdminPasswordModal } from './components/modals/EditAdminPasswordModal';
 import { EditClientPasswordModal } from './components/modals/EditClientPasswordModal';
+import { AdminLoginModal } from './components/modals/AdminLoginModal';
 
 // Client components
 import { ClientBoletosView } from './components/client/ClientBoletosView';
@@ -89,6 +90,7 @@ export default function App() {
 
   // Password Modals state
   const [adminPassword, setAdminPassword] = useState<string>('admin123');
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState<boolean>(false);
   const [isEditAdminPasswordModalOpen, setIsEditAdminPasswordModalOpen] = useState<boolean>(false);
   const [isEditClientPasswordModalOpen, setIsEditClientPasswordModalOpen] = useState<boolean>(false);
 
@@ -643,10 +645,7 @@ export default function App() {
       <Header
         session={session}
         onLogout={handleLogout}
-        onSwitchRole={() => {
-          setSession(null);
-          saveStoredSession(null);
-        }}
+        onOpenAdminLogin={() => setIsAdminLoginModalOpen(true)}
         activeTab={activeTab}
         onTabChange={(tab) => {
           setActiveTab(tab);
@@ -669,8 +668,6 @@ export default function App() {
           <LoginView
             clients={clients}
             onLoginClient={handleLoginClient}
-            onLoginAdmin={handleLoginAdmin}
-            adminPassword={adminPassword}
             onToast={addToast}
           />
         ) : session.role === 'client' && session.client ? (
@@ -710,6 +707,7 @@ export default function App() {
                 boletos={boletos}
                 nfes={nfes}
                 tickets={tickets}
+                sporadicServices={sporadicServices}
                 onNavigate={(tab) => {
                   setActiveTab(tab);
                   setAdminClientFilter('');
@@ -755,6 +753,7 @@ export default function App() {
                 boletos={boletos}
                 initialSelectedClientId={adminClientFilter}
                 onAddBoleto={handleAddBoleto}
+                onAddSporadicService={handleAddSporadicService}
                 onUpdateBoletoStatus={handleUpdateBoletoStatus}
                 onDeleteBoleto={handleDeleteBoleto}
                 onToast={addToast}
@@ -785,6 +784,14 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <AdminLoginModal
+        isOpen={isAdminLoginModalOpen}
+        onClose={() => setIsAdminLoginModalOpen(false)}
+        adminPassword={adminPassword}
+        onLoginAdmin={handleLoginAdmin}
+        onToast={addToast}
+      />
 
       <EditAdminPasswordModal
         isOpen={isEditAdminPasswordModalOpen}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket,
   MessageSquare,
@@ -326,9 +327,18 @@ export const AdminTicketsView: React.FC<AdminTicketsViewProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusInfo.bg} ${statusInfo.text}`}>
-                        {statusInfo.label}
-                      </span>
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={tkt.status}
+                          initial={{ scale: 0.75, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.75, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                          className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${statusInfo.bg} ${statusInfo.text}`}
+                        >
+                          {statusInfo.label}
+                        </motion.span>
+                      </AnimatePresence>
                       <span className="text-[10px] font-mono text-slate-500">
                         {new Date(tkt.createdAt).toLocaleDateString('pt-BR')}
                       </span>
@@ -390,26 +400,52 @@ export const AdminTicketsView: React.FC<AdminTicketsViewProps> = ({
                     <span>Encerrar Atendimento</span>
                   </button>
 
-                  <select
-                    value={selectedTicket.status}
-                    onChange={(e) => {
-                      const newSt = e.target.value as TicketStatus;
-                      onUpdateTicketStatus(selectedTicket.id, newSt);
-                      onToast('success', 'Status Alterado', `Chamado #${selectedTicket.id} alterado.`);
-                    }}
-                    className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-bold text-white focus:ring-2 focus:ring-sky-500"
-                  >
-                    <option value="open">Aberto</option>
-                    <option value="in_progress">Em Atendimento</option>
-                    <option value="resolved">Resolvido</option>
-                    <option value="closed">Fechado</option>
-                  </select>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={selectedTicket.status}
+                      initial={{ scale: 0.85, opacity: 0, y: -4 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.85, opacity: 0, y: 4 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    >
+                      <select
+                        value={selectedTicket.status}
+                        onChange={(e) => {
+                          const newSt = e.target.value as TicketStatus;
+                          onUpdateTicketStatus(selectedTicket.id, newSt);
+                          onToast('success', 'Status Alterado', `Chamado #${selectedTicket.id} alterado.`);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black border focus:outline-none cursor-pointer transition-all shadow-sm ${
+                          selectedTicket.status === 'open'
+                            ? 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900 ring-1 ring-amber-500/30'
+                            : selectedTicket.status === 'in_progress'
+                            ? 'bg-sky-950 text-sky-300 border-sky-800 hover:bg-sky-900 ring-1 ring-sky-500/30'
+                            : selectedTicket.status === 'resolved'
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900 ring-1 ring-emerald-500/30'
+                            : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-900 ring-1 ring-slate-500/30'
+                        }`}
+                      >
+                        <option value="open" className="bg-slate-900 text-amber-300">Aberto</option>
+                        <option value="in_progress" className="bg-slate-900 text-sky-300">Em Atendimento</option>
+                        <option value="resolved" className="bg-slate-900 text-emerald-300">Resolvido</option>
+                        <option value="closed" className="bg-slate-900 text-slate-400">Fechado</option>
+                      </select>
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
               </div>
 
               {/* Closure Details Banner (if already resolved or closed) */}
-              {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
-                <div className="p-3.5 bg-slate-950/90 border-b border-emerald-900/40 text-xs space-y-2">
+              <AnimatePresence>
+                {(selectedTicket.status === 'resolved' || selectedTicket.status === 'closed') && (
+                  <motion.div
+                    key="closure-banner"
+                    initial={{ opacity: 0, height: 0, y: -10 }}
+                    animate={{ opacity: 1, height: 'auto', y: 0 }}
+                    exit={{ opacity: 0, height: 0, y: -10 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="p-3.5 bg-slate-950/90 border-b border-emerald-900/40 text-xs space-y-2 overflow-hidden"
+                  >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 text-emerald-400 font-extrabold uppercase tracking-wider text-[11px]">
                       <CheckCircle2 className="w-4 h-4" />
@@ -460,8 +496,9 @@ export const AdminTicketsView: React.FC<AdminTicketsViewProps> = ({
                       </button>
                     </div>
                   )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Chat Timeline */}
               <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-900/60">

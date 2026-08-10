@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { CreditCard, Plus, Search, CheckCircle2, Clock, AlertTriangle, Trash2, Edit3, X, QrCode, Eye, FileText } from 'lucide-react';
-import { Boleto, Client, BoletoStatus, PDFAttachment } from '../../types';
+import { CreditCard, Plus, Search, CheckCircle2, Clock, AlertTriangle, Trash2, Edit3, X, QrCode, Eye, FileText, Briefcase } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Boleto, Client, BoletoStatus, PDFAttachment, SporadicService } from '../../types';
 import { generateDigitableLine, generateRandomBarcode } from '../../utils/cpf';
 import { BoletoModal } from '../modals/BoletoModal';
+import { SporadicServiceModal } from '../modals/SporadicServiceModal';
 import { PDFUploader } from '../common/PDFUploader';
 
 interface AdminBoletosViewProps {
@@ -10,6 +12,7 @@ interface AdminBoletosViewProps {
   boletos: Boleto[];
   initialSelectedClientId?: string;
   onAddBoleto: (boleto: Omit<Boleto, 'id' | 'createdAt'>) => void;
+  onAddSporadicService?: (service: Omit<SporadicService, 'id' | 'createdAt'>) => void;
   onUpdateBoletoStatus: (boletoId: string, status: BoletoStatus) => void;
   onDeleteBoleto: (boletoId: string) => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
@@ -20,6 +23,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   boletos,
   initialSelectedClientId = '',
   onAddBoleto,
+  onAddSporadicService,
   onUpdateBoletoStatus,
   onDeleteBoleto,
   onToast,
@@ -29,6 +33,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   const [issueDateFilter, setIssueDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSporadicModalOpen, setIsSporadicModalOpen] = useState(false);
   const [viewingBoleto, setViewingBoleto] = useState<Boleto | null>(null);
 
   // Form states for adding boleto
@@ -147,13 +152,25 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={openNewBoletoModal}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Emitir Novo Boleto</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onAddSporadicService && (
+            <button
+              onClick={() => setIsSporadicModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs rounded-xl border border-amber-500/30 transition-all shadow-sm active:scale-95"
+            >
+              <Briefcase className="w-4 h-4 text-amber-400" />
+              <span>Novo Serviço Esporádico</span>
+            </button>
+          )}
+
+          <button
+            onClick={openNewBoletoModal}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0 active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Emitir Novo Boleto</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters Bar */}
@@ -256,6 +273,29 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                 <div className="space-y-1.5 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono text-slate-400">#{boleto.id}</span>
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={boleto.status}
+                        initial={{ scale: 0.7, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.7, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                        className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full border flex items-center gap-1 ${
+                          boleto.status === 'paid'
+                            ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                            : boleto.status === 'overdue'
+                            ? 'bg-rose-950 text-rose-300 border-rose-800'
+                            : 'bg-amber-950 text-amber-300 border-amber-800'
+                        }`}
+                      >
+                        {boleto.status === 'paid' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                        {boleto.status === 'overdue' && <AlertTriangle className="w-3 h-3 text-rose-400" />}
+                        {boleto.status === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
+                        <span>
+                          {boleto.status === 'paid' ? 'Pago' : boleto.status === 'overdue' ? 'Em atraso' : 'A vencer'}
+                        </span>
+                      </motion.span>
+                    </AnimatePresence>
                     <span className="text-xs font-bold text-amber-400">
                       Cliente: {client ? `${client.name} (${client.cpf})` : 'Cliente'}
                     </span>
@@ -293,26 +333,36 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                   {/* Status Dropdown */}
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Status:</span>
-                    <select
-                      value={boleto.status}
-                      onChange={(e) => {
-                        const newStatus = e.target.value as BoletoStatus;
-                        onUpdateBoletoStatus(boleto.id, newStatus);
-                        const statusLabel = newStatus === 'pending' ? 'A vencer' : newStatus === 'paid' ? 'Pago' : 'Em atraso';
-                        onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
-                      }}
-                      className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all ${
-                        boleto.status === 'paid'
-                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
-                          : boleto.status === 'overdue'
-                          ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900'
-                          : 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900'
-                      }`}
-                    >
-                      <option value="pending" className="bg-slate-900 text-amber-300">A vencer</option>
-                      <option value="paid" className="bg-slate-900 text-emerald-300">Pago</option>
-                      <option value="overdue" className="bg-slate-900 text-rose-300">Em atraso</option>
-                    </select>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={boleto.status}
+                        initial={{ scale: 0.85, opacity: 0, y: -4 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.85, opacity: 0, y: 4 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                      >
+                        <select
+                          value={boleto.status}
+                          onChange={(e) => {
+                            const newStatus = e.target.value as BoletoStatus;
+                            onUpdateBoletoStatus(boleto.id, newStatus);
+                            const statusLabel = newStatus === 'pending' ? 'A vencer' : newStatus === 'paid' ? 'Pago' : 'Em atraso';
+                            onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
+                          }}
+                          className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all shadow-sm ${
+                            boleto.status === 'paid'
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900 ring-1 ring-emerald-500/30'
+                              : boleto.status === 'overdue'
+                              ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900 ring-1 ring-rose-500/30'
+                              : 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900 ring-1 ring-amber-500/30'
+                          }`}
+                        >
+                          <option value="pending" className="bg-slate-900 text-amber-300">A vencer</option>
+                          <option value="paid" className="bg-slate-900 text-emerald-300">Pago</option>
+                          <option value="overdue" className="bg-slate-900 text-rose-300">Em atraso</option>
+                        </select>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
 
                   <button
@@ -480,6 +530,18 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
             navigator.clipboard.writeText(line);
             onToast('success', 'Código de Barras Copiado!');
           }}
+        />
+      )}
+
+      {/* Modal for Sporadic Service */}
+      {onAddSporadicService && (
+        <SporadicServiceModal
+          isOpen={isSporadicModalOpen}
+          onClose={() => setIsSporadicModalOpen(false)}
+          clients={clients}
+          initialClientId={selectedClientId}
+          onAddSporadicService={onAddSporadicService}
+          onToast={onToast}
         />
       )}
     </div>

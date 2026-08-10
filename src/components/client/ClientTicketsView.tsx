@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Ticket, Plus, MessageSquare, Clock, Send, CheckCircle2, AlertCircle, X, Shield, MessageCircle, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { SupportTicket, Client, TicketCategory, TicketPriority } from '../../types';
 import { COMPANY_WHATSAPP_NUMBER, COMPANY_WHATSAPP_FORMATTED, CLOSURE_REASONS } from '../../constants';
@@ -159,9 +160,18 @@ export const ClientTicketsView: React.FC<ClientTicketsViewProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full border ${statusInfo.bg} ${statusInfo.text}`}>
-                        {statusInfo.label}
-                      </span>
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={tkt.status}
+                          initial={{ scale: 0.75, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.75, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                          className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full border ${statusInfo.bg} ${statusInfo.text}`}
+                        >
+                          {statusInfo.label}
+                        </motion.span>
+                      </AnimatePresence>
                       <span className="text-[10px] font-mono text-slate-500">
                         {new Date(tkt.createdAt).toLocaleDateString('pt-BR')}
                       </span>
@@ -204,9 +214,18 @@ export const ClientTicketsView: React.FC<ClientTicketsViewProps> = ({
                     <MessageCircle className="w-3.5 h-3.5" />
                     <span>WhatsApp</span>
                   </button>
-                  <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${statusBadges[selectedTicket.status].bg} ${statusBadges[selectedTicket.status].text}`}>
-                    {statusBadges[selectedTicket.status].label}
-                  </span>
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={selectedTicket.status}
+                      initial={{ scale: 0.75, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.75, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-full border ${statusBadges[selectedTicket.status].bg} ${statusBadges[selectedTicket.status].text}`}
+                    >
+                      {statusBadges[selectedTicket.status].label}
+                    </motion.span>
+                  </AnimatePresence>
                 </div>
               </div>
 
