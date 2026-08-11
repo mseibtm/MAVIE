@@ -16,7 +16,8 @@ import {
   notifyNewBoletoCreated,
   checkAndNotifyDueBoletos,
   cleanupOrphanNotifications,
-  sendNativePush
+  sendNativePush,
+  syncAndSaveBoletoStatuses
 } from './utils/notificationService';
 import {
   seedFirestoreIfEmpty,
@@ -127,16 +128,22 @@ export default function App() {
     // 1. Initial local load
     const loadedClients = getStoredClients();
     const loadedBoletos = getStoredBoletos();
+    const syncedBoletos = syncAndSaveBoletoStatuses(loadedBoletos);
     setClients(loadedClients);
-    setBoletos(loadedBoletos);
+    setBoletos(syncedBoletos);
     setNfes(getStoredNFes());
     setTickets(getStoredTickets());
     setSporadicServices(getStoredSporadicServices());
     setAdminPassword(getStoredAdminPassword());
     
     // Check due dates and load notifications
-    const updatedNotifs = checkAndNotifyDueBoletos(loadedBoletos, loadedClients);
+    const updatedNotifs = checkAndNotifyDueBoletos(syncedBoletos, loadedClients);
     setNotifications(updatedNotifs);
+
+    // Periodic sync timer for boleto due dates
+    const dateCheckTimer = setInterval(() => {
+      setBoletos((prev) => syncAndSaveBoletoStatuses(prev));
+    }, 30000);
 
     // 2. Seed Firestore if empty, then listen to realtime updates
     seedFirestoreIfEmpty().then(() => {
@@ -163,8 +170,8 @@ export default function App() {
             return rb;
           });
 
-          saveStoredBoletos(mergedRemote);
-          return mergedRemote;
+          const syncedRemote = syncAndSaveBoletoStatuses(mergedRemote);
+          return syncedRemote;
         });
       });
       const unsubNfes = subscribeNFes((remoteNfes) => {
@@ -208,6 +215,7 @@ export default function App() {
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
 
       return () => {
+        clearInterval(dateCheckTimer);
         unsubClients();
         unsubBoletos();
         unsubNfes();
@@ -383,14 +391,21 @@ export default function App() {
 
   // Boleto CRUD
   const handleAddBoleto = (newBoletoData: Omit<Boleto, 'id' | 'createdAt'>) => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    let initialStatus = newBoletoData.status;
+    if (initialStatus !== 'paid' && newBoletoData.dueDate < todayStr) {
+      initialStatus = 'overdue';
+    }
+
     const newBoleto: Boleto = {
       ...newBoletoData,
+      status: initialStatus,
       id: `bol-${Math.floor(100 + Math.random() * 900)}`,
       createdAt: new Date().toISOString(),
     };
-    const updated = [newBoleto, ...boletos];
+    const updated = syncAndSaveBoletoStatuses([newBoleto, ...boletos]);
     setBoletos(updated);
-    saveStoredBoletos(updated);
     saveBoletoToFirestore(newBoleto);
 
     // Trigger Notification for new boleto

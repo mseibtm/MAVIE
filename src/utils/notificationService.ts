@@ -1,6 +1,6 @@
 import { Boleto, Client, AppNotification } from '../types';
-import { getStoredNotifications, saveStoredNotifications } from './storage';
-import { saveNotificationToFirestore, deleteNotificationFromFirestore } from '../lib/firestoreSync';
+import { getStoredNotifications, saveStoredNotifications, saveStoredBoletos } from './storage';
+import { saveNotificationToFirestore, deleteNotificationFromFirestore, saveBoletoToFirestore } from '../lib/firestoreSync';
 
 /**
  * Request permission for Browser Push Notifications
@@ -229,4 +229,47 @@ export function checkAndNotifyDueBoletos(
   }
 
   return existingNotifications;
+}
+
+/**
+ * Automatically sync boleto statuses based on due date:
+ * - If status is not 'paid' and dueDate < todayStr -> status becomes 'overdue'
+ * - If status is 'overdue' and dueDate >= todayStr -> status becomes 'pending'
+ */
+export function syncBoletoStatuses(boletos: Boleto[]): { updatedBoletos: Boleto[]; changedBoletos: Boleto[] } {
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  const changedBoletos: Boleto[] = [];
+  const updatedBoletos = boletos.map((b) => {
+    if (b.status === 'paid') return b;
+
+    if (b.dueDate < todayStr && b.status !== 'overdue') {
+      const updated = { ...b, status: 'overdue' as const };
+      changedBoletos.push(updated);
+      return updated;
+    }
+
+    if (b.dueDate >= todayStr && b.status === 'overdue') {
+      const updated = { ...b, status: 'pending' as const };
+      changedBoletos.push(updated);
+      return updated;
+    }
+
+    return b;
+  });
+
+  return { updatedBoletos, changedBoletos };
+}
+
+/**
+ * Sync boleto statuses and persist changes to local storage & Firestore if needed
+ */
+export function syncAndSaveBoletoStatuses(boletos: Boleto[]): Boleto[] {
+  const { updatedBoletos, changedBoletos } = syncBoletoStatuses(boletos);
+  if (changedBoletos.length > 0) {
+    saveStoredBoletos(updatedBoletos);
+    changedBoletos.forEach((b) => saveBoletoToFirestore(b));
+  }
+  return updatedBoletos;
 }

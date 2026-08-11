@@ -78,7 +78,7 @@ export const INITIAL_BOLETOS: Boleto[] = [
     description: 'Consultoria Financeira Especializada - Etapa 2',
     amount: 3200.50,
     dueDate: '2026-08-10',
-    status: 'pending',
+    status: 'overdue',
     lineDigitable: generateDigitableLine(),
     pixKey: '32.922.555/0001-87',
     barcode: '34191800070123456789012345678901891230000320050',
