@@ -686,6 +686,7 @@ export default function App() {
                 client={session.client}
                 nfes={nfes}
                 onToast={addToast}
+                onNavigateHome={() => setActiveTab('boletos')}
               />
             )}
 
