@@ -237,7 +237,19 @@ export async function deleteTicketFromFirestore(id: string) {
 
 export async function saveNFeToFirestore(nfe: NotaFiscal) {
   try {
-    await setDoc(doc(db, COLS.NFES, nfe.id), removeUndefinedFields(nfe), { merge: true });
+    const docToSave: Record<string, any> = { ...nfe };
+
+    if (docToSave.pdfFile && docToSave.pdfFile.dataUrl && docToSave.pdfFile.dataUrl.length > 700000) {
+      docToSave.pdfFile = {
+        name: docToSave.pdfFile.name,
+        size: docToSave.pdfFile.size,
+        uploadedAt: docToSave.pdfFile.uploadedAt,
+        dataUrl: docToSave.pdfFile.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+
+    await setDoc(doc(db, COLS.NFES, nfe.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving NFe to Firestore:', err);
   }

@@ -167,9 +167,24 @@ export default function App() {
           return mergedRemote;
         });
       });
-      const unsubNfes = subscribeNFes((nf) => {
-        setNfes(nf);
-        saveStoredNFes(nf);
+      const unsubNfes = subscribeNFes((remoteNfes) => {
+        setNfes((prevLocal) => {
+          const localMap = new Map<string, NotaFiscal>(prevLocal.map((n) => [n.id, n]));
+          const mergedRemote = remoteNfes.map((rn) => {
+            const ln = localMap.get(rn.id);
+            if (ln) {
+              return {
+                ...rn,
+                pdfFile: (ln.pdfFile?.dataUrl && !ln.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                  ? ln.pdfFile
+                  : rn.pdfFile,
+              };
+            }
+            return rn;
+          });
+          saveStoredNFes(mergedRemote);
+          return mergedRemote;
+        });
       });
       const unsubTickets = subscribeTickets((tk) => {
         setTickets(tk);
