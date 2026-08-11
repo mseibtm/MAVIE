@@ -91,7 +91,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 
       {/* Notification Dropdown Popover */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in slide-in-from-top-2 duration-150">
+        <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 w-auto sm:w-96 max-w-md bg-zinc-950 border border-zinc-800 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[85vh] animate-in fade-in slide-in-from-top-2 duration-150">
           
           {/* Header */}
           <div className="p-3.5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between">
@@ -228,7 +228,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
                           {formatTimestamp(notif.timestamp)}
                         </span>
                       </div>
-                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+                      <p className="text-xs text-zinc-300 mt-1 leading-relaxed break-words">
                         {session?.role === 'client' && session.client
                           ? notif.body
                               .replace(`para ${session.client.name}`, 'para você')
