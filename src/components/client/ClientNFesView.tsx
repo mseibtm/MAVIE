@@ -74,7 +74,7 @@ export const ClientNFesView: React.FC<ClientNFesViewProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-sky-950 text-sky-300 border border-sky-800 uppercase tracking-wider">
-                      NF-e Nº {nfe.number}
+                      Nota Fiscal
                     </span>
                     <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -92,7 +92,7 @@ export const ClientNFesView: React.FC<ClientNFesViewProps> = ({
                   {nfe.pdfFile?.dataUrl ? (
                     <a
                       href={nfe.pdfFile.dataUrl}
-                      download={nfe.pdfFile.name || `Nota_Fiscal_${nfe.number}.pdf`}
+                      download={nfe.pdfFile.name || 'Nota_Fiscal.pdf'}
                       onClick={() => onToast('success', 'Download iniciado', `Baixando ${nfe.pdfFile?.name || 'nota fiscal'}.`)}
                       className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-98"
                     >
