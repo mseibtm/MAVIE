@@ -508,13 +508,51 @@ export default function App() {
     }
   };
 
-  const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment) => {
+  const handleUpdateBoletoDueDate = (boletoId: string, newDueDate: string) => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    let updatedBoleto: Boleto | undefined;
+
+    const updated = boletos.map((b) => {
+      if (b.id === boletoId) {
+        let newStatus = b.status;
+        if (newStatus !== 'paid') {
+          newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
+        }
+        updatedBoleto = {
+          ...b,
+          dueDate: newDueDate,
+          status: newStatus,
+        };
+        return updatedBoleto;
+      }
+      return b;
+    });
+
+    const synced = syncAndSaveBoletoStatuses(updated);
+    setBoletos(synced);
+
+    if (updatedBoleto) {
+      saveBoletoToFirestore(updatedBoleto);
+      const [year, month, day] = newDueDate.split('-');
+      const formattedDate = `${day}/${month}/${year}`;
+      addToast('success', 'Vencimento Atualizado', `Boleto #${boletoId} alterado para ${formattedDate}.`);
+    }
+
+    // Refresh notifications for due date
+    const updatedNotifs = checkAndNotifyDueBoletos(synced, clients);
+    setNotifications(updatedNotifs);
+  };
+
+  const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment, markAsPaid: boolean = false) => {
     let updatedBoleto: Boleto | undefined;
     const updated = boletos.map((b) => {
       if (b.id === boletoId) {
         updatedBoleto = {
           ...b,
           paymentReceipt: receipt,
+          status: markAsPaid ? 'paid' : b.status,
+          paidAt: markAsPaid ? new Date().toISOString() : b.paidAt,
         };
         return updatedBoleto;
       }
@@ -524,6 +562,24 @@ export default function App() {
     saveStoredBoletos(updated);
     if (updatedBoleto) {
       saveBoletoToFirestore(updatedBoleto);
+    }
+  };
+
+  const handleRemoveBoletoReceipt = (boletoId: string) => {
+    let updatedBoleto: Boleto | undefined;
+    const updated = boletos.map((b) => {
+      if (b.id === boletoId) {
+        const { paymentReceipt, ...rest } = b;
+        updatedBoleto = rest as Boleto;
+        return updatedBoleto;
+      }
+      return b;
+    });
+    setBoletos(updated);
+    saveStoredBoletos(updated);
+    if (updatedBoleto) {
+      saveBoletoToFirestore(updatedBoleto);
+      addToast('info', 'Comprovante Removido', `O comprovante do boleto #${boletoId} foi removido.`);
     }
   };
 
@@ -786,6 +842,9 @@ export default function App() {
                 onAddBoleto={handleAddBoleto}
                 onAddSporadicService={handleAddSporadicService}
                 onUpdateBoletoStatus={handleUpdateBoletoStatus}
+                onUpdateBoletoDueDate={handleUpdateBoletoDueDate}
+                onUploadReceipt={handleUploadBoletoReceipt}
+                onRemoveReceipt={handleRemoveBoletoReceipt}
                 onDeleteBoleto={handleDeleteBoleto}
                 onToast={addToast}
               />
