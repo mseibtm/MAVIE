@@ -489,32 +489,61 @@ export default function App() {
   };
 
   const handleUpdateBoletoStatus = (boletoId: string, status: BoletoStatus) => {
+    // Guarantee immediate persistence with current storage snapshot
+    const currentList = getStoredBoletos();
+    const existing = currentList.find((b) => b.id === boletoId);
     let updatedBoleto: Boleto | undefined;
+
+    if (existing) {
+      updatedBoleto = {
+        ...existing,
+        status,
+        paidAt: status === 'paid' ? (existing.paidAt || new Date().toISOString()) : undefined,
+      };
+      saveBoletoToFirestore(updatedBoleto);
+    }
+
     setBoletos((prev) => {
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
-          updatedBoleto = {
+          const item: Boleto = {
             ...b,
             status,
             paidAt: status === 'paid' ? (b.paidAt || new Date().toISOString()) : undefined,
           };
-          return updatedBoleto;
+          updatedBoleto = item;
+          return item;
         }
         return b;
       });
       saveStoredBoletos(updated);
+      if (updatedBoleto) {
+        saveBoletoToFirestore(updatedBoleto);
+      }
       return updated;
     });
-
-    if (updatedBoleto) {
-      saveBoletoToFirestore(updatedBoleto);
-    }
   };
 
   const handleUpdateBoletoDueDate = (boletoId: string, newDueDate: string) => {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
+    const currentList = getStoredBoletos();
+    const existing = currentList.find((b) => b.id === boletoId);
     let updatedBoleto: Boleto | undefined;
+
+    if (existing) {
+      let newStatus = existing.status;
+      if (newStatus !== 'paid') {
+        newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
+      }
+      updatedBoleto = {
+        ...existing,
+        dueDate: newDueDate,
+        status: newStatus,
+      };
+      saveBoletoToFirestore(updatedBoleto);
+    }
 
     setBoletos((prev) => {
       const updated = prev.map((b) => {
@@ -523,72 +552,96 @@ export default function App() {
           if (newStatus !== 'paid') {
             newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
           }
-          updatedBoleto = {
+          const item: Boleto = {
             ...b,
             dueDate: newDueDate,
             status: newStatus,
           };
-          return updatedBoleto;
+          updatedBoleto = item;
+          return item;
         }
         return b;
       });
 
       const synced = syncAndSaveBoletoStatuses(updated);
       saveStoredBoletos(synced);
+      if (updatedBoleto) {
+        saveBoletoToFirestore(updatedBoleto);
+      }
       return synced;
     });
 
-    if (updatedBoleto) {
-      saveBoletoToFirestore(updatedBoleto);
-      const [year, month, day] = newDueDate.split('-');
-      const formattedDate = `${day}/${month}/${year}`;
-      addToast('success', 'Vencimento Atualizado', `Boleto #${boletoId} alterado para ${formattedDate}.`);
-    }
+    const [year, month, day] = newDueDate.split('-');
+    const formattedDate = `${day}/${month}/${year}`;
+    addToast('success', 'Vencimento Atualizado', `Boleto #${boletoId} alterado para ${formattedDate}.`);
   };
 
   const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment, markAsPaid: boolean = false) => {
+    const currentList = getStoredBoletos();
+    const existing = currentList.find((b) => b.id === boletoId);
     let updatedBoleto: Boleto | undefined;
+
+    if (existing) {
+      updatedBoleto = {
+        ...existing,
+        paymentReceipt: receipt,
+        status: markAsPaid ? 'paid' : existing.status,
+        paidAt: markAsPaid ? (existing.paidAt || new Date().toISOString()) : existing.paidAt,
+      };
+      saveBoletoToFirestore(updatedBoleto);
+    }
+
     setBoletos((prev) => {
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
-          updatedBoleto = {
+          const item: Boleto = {
             ...b,
             paymentReceipt: receipt,
             status: markAsPaid ? 'paid' : b.status,
             paidAt: markAsPaid ? (b.paidAt || new Date().toISOString()) : b.paidAt,
           };
-          return updatedBoleto;
+          updatedBoleto = item;
+          return item;
         }
         return b;
       });
       saveStoredBoletos(updated);
+      if (updatedBoleto) {
+        saveBoletoToFirestore(updatedBoleto);
+      }
       return updated;
     });
-
-    if (updatedBoleto) {
-      saveBoletoToFirestore(updatedBoleto);
-    }
   };
 
   const handleRemoveBoletoReceipt = (boletoId: string) => {
+    const currentList = getStoredBoletos();
+    const existing = currentList.find((b) => b.id === boletoId);
     let updatedBoleto: Boleto | undefined;
+
+    if (existing) {
+      const { paymentReceipt, ...rest } = existing;
+      updatedBoleto = rest as Boleto;
+      saveBoletoToFirestore(updatedBoleto);
+    }
+
     setBoletos((prev) => {
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
           const { paymentReceipt, ...rest } = b;
-          updatedBoleto = rest as Boleto;
-          return updatedBoleto;
+          const item = rest as Boleto;
+          updatedBoleto = item;
+          return item;
         }
         return b;
       });
       saveStoredBoletos(updated);
+      if (updatedBoleto) {
+        saveBoletoToFirestore(updatedBoleto);
+      }
       return updated;
     });
 
-    if (updatedBoleto) {
-      saveBoletoToFirestore(updatedBoleto);
-      addToast('info', 'Comprovante Removido', `O comprovante do boleto #${boletoId} foi removido.`);
-    }
+    addToast('info', 'Comprovante Removido', `O comprovante do boleto #${boletoId} foi removido.`);
   };
 
   const handleDeleteBoleto = (boletoId: string) => {
