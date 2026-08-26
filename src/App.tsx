@@ -171,6 +171,7 @@ export default function App() {
           });
 
           const syncedRemote = syncAndSaveBoletoStatuses(mergedRemote);
+          saveStoredBoletos(syncedRemote);
           return syncedRemote;
         });
       });
@@ -202,14 +203,10 @@ export default function App() {
         saveStoredSporadicServices(sp);
       });
       const unsubNotifs = subscribeNotifications((nt) => {
-        setClients((latestClients) => {
-          setBoletos((latestBoletos) => {
-            const cleaned = cleanupOrphanNotifications(nt, latestClients, latestBoletos);
-            setNotifications(cleaned);
-            saveStoredNotifications(cleaned);
-            return latestBoletos;
-          });
-          return latestClients;
+        setNotifications((prevNotifs) => {
+          const cleaned = cleanupOrphanNotifications(nt, getStoredClients(), getStoredBoletos());
+          saveStoredNotifications(cleaned);
+          return cleaned;
         });
       });
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
@@ -404,8 +401,11 @@ export default function App() {
       id: `bol-${Math.floor(100 + Math.random() * 900)}`,
       createdAt: new Date().toISOString(),
     };
-    const updated = syncAndSaveBoletoStatuses([newBoleto, ...boletos]);
-    setBoletos(updated);
+    setBoletos((prev) => {
+      const updated = syncAndSaveBoletoStatuses([newBoleto, ...prev]);
+      saveStoredBoletos(updated);
+      return updated;
+    });
     saveBoletoToFirestore(newBoleto);
 
     // Trigger Notification for new boleto
@@ -490,19 +490,22 @@ export default function App() {
 
   const handleUpdateBoletoStatus = (boletoId: string, status: BoletoStatus) => {
     let updatedBoleto: Boleto | undefined;
-    const updated = boletos.map((b) => {
-      if (b.id === boletoId) {
-        updatedBoleto = {
-          ...b,
-          status,
-          paidAt: status === 'paid' ? new Date().toISOString() : b.paidAt,
-        };
-        return updatedBoleto;
-      }
-      return b;
+    setBoletos((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id === boletoId) {
+          updatedBoleto = {
+            ...b,
+            status,
+            paidAt: status === 'paid' ? (b.paidAt || new Date().toISOString()) : undefined,
+          };
+          return updatedBoleto;
+        }
+        return b;
+      });
+      saveStoredBoletos(updated);
+      return updated;
     });
-    setBoletos(updated);
-    saveStoredBoletos(updated);
+
     if (updatedBoleto) {
       saveBoletoToFirestore(updatedBoleto);
     }
@@ -513,24 +516,27 @@ export default function App() {
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     let updatedBoleto: Boleto | undefined;
 
-    const updated = boletos.map((b) => {
-      if (b.id === boletoId) {
-        let newStatus = b.status;
-        if (newStatus !== 'paid') {
-          newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
+    setBoletos((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id === boletoId) {
+          let newStatus = b.status;
+          if (newStatus !== 'paid') {
+            newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
+          }
+          updatedBoleto = {
+            ...b,
+            dueDate: newDueDate,
+            status: newStatus,
+          };
+          return updatedBoleto;
         }
-        updatedBoleto = {
-          ...b,
-          dueDate: newDueDate,
-          status: newStatus,
-        };
-        return updatedBoleto;
-      }
-      return b;
-    });
+        return b;
+      });
 
-    const synced = syncAndSaveBoletoStatuses(updated);
-    setBoletos(synced);
+      const synced = syncAndSaveBoletoStatuses(updated);
+      saveStoredBoletos(synced);
+      return synced;
+    });
 
     if (updatedBoleto) {
       saveBoletoToFirestore(updatedBoleto);
@@ -538,28 +544,27 @@ export default function App() {
       const formattedDate = `${day}/${month}/${year}`;
       addToast('success', 'Vencimento Atualizado', `Boleto #${boletoId} alterado para ${formattedDate}.`);
     }
-
-    // Refresh notifications for due date
-    const updatedNotifs = checkAndNotifyDueBoletos(synced, clients);
-    setNotifications(updatedNotifs);
   };
 
   const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment, markAsPaid: boolean = false) => {
     let updatedBoleto: Boleto | undefined;
-    const updated = boletos.map((b) => {
-      if (b.id === boletoId) {
-        updatedBoleto = {
-          ...b,
-          paymentReceipt: receipt,
-          status: markAsPaid ? 'paid' : b.status,
-          paidAt: markAsPaid ? new Date().toISOString() : b.paidAt,
-        };
-        return updatedBoleto;
-      }
-      return b;
+    setBoletos((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id === boletoId) {
+          updatedBoleto = {
+            ...b,
+            paymentReceipt: receipt,
+            status: markAsPaid ? 'paid' : b.status,
+            paidAt: markAsPaid ? (b.paidAt || new Date().toISOString()) : b.paidAt,
+          };
+          return updatedBoleto;
+        }
+        return b;
+      });
+      saveStoredBoletos(updated);
+      return updated;
     });
-    setBoletos(updated);
-    saveStoredBoletos(updated);
+
     if (updatedBoleto) {
       saveBoletoToFirestore(updatedBoleto);
     }
@@ -567,16 +572,19 @@ export default function App() {
 
   const handleRemoveBoletoReceipt = (boletoId: string) => {
     let updatedBoleto: Boleto | undefined;
-    const updated = boletos.map((b) => {
-      if (b.id === boletoId) {
-        const { paymentReceipt, ...rest } = b;
-        updatedBoleto = rest as Boleto;
-        return updatedBoleto;
-      }
-      return b;
+    setBoletos((prev) => {
+      const updated = prev.map((b) => {
+        if (b.id === boletoId) {
+          const { paymentReceipt, ...rest } = b;
+          updatedBoleto = rest as Boleto;
+          return updatedBoleto;
+        }
+        return b;
+      });
+      saveStoredBoletos(updated);
+      return updated;
     });
-    setBoletos(updated);
-    saveStoredBoletos(updated);
+
     if (updatedBoleto) {
       saveBoletoToFirestore(updatedBoleto);
       addToast('info', 'Comprovante Removido', `O comprovante do boleto #${boletoId} foi removido.`);
@@ -584,16 +592,20 @@ export default function App() {
   };
 
   const handleDeleteBoleto = (boletoId: string) => {
-    const updated = boletos.filter((b) => b.id !== boletoId);
-    setBoletos(updated);
-    saveStoredBoletos(updated);
+    setBoletos((prev) => {
+      const updated = prev.filter((b) => b.id !== boletoId);
+      saveStoredBoletos(updated);
+      return updated;
+    });
     deleteBoletoFromFirestore(boletoId);
 
-    const removedNotifs = notifications.filter((n) => n.boletoId === boletoId);
-    removedNotifs.forEach((n) => deleteNotificationFromFirestore(n.id));
-    const updatedNotifs = notifications.filter((n) => n.boletoId !== boletoId);
-    setNotifications(updatedNotifs);
-    saveStoredNotifications(updatedNotifs);
+    setNotifications((prevNotifs) => {
+      const removedNotifs = prevNotifs.filter((n) => n.boletoId === boletoId);
+      removedNotifs.forEach((n) => deleteNotificationFromFirestore(n.id));
+      const updatedNotifs = prevNotifs.filter((n) => n.boletoId !== boletoId);
+      saveStoredNotifications(updatedNotifs);
+      return updatedNotifs;
+    });
   };
 
   // NF-e CRUD

@@ -197,7 +197,7 @@ export async function saveBoletoToFirestore(boleto: Boleto) {
       };
     }
 
-    await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave), { merge: true });
+    await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave));
   } catch (err) {
     console.error('Error saving boleto to Firestore:', err);
   }
