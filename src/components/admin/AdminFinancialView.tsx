@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
   DollarSign,
@@ -109,14 +109,18 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
   const periodOptions = getAvailablePeriods();
 
-  // Filter Boletos and Sporadic Services by Selected Period
+  const validClientIds = useMemo(() => new Set(clients.map((c) => c.id)), [clients]);
+
+  // Filter Boletos and Sporadic Services by Selected Period (ensuring valid client)
   const filteredBoletos = boletos.filter((b) => {
+    if (!validClientIds.has(b.clientId)) return false;
     if (selectedPeriod === 'all') return true;
     const d = b.paidAt || b.dueDate || b.createdAt;
     return d && d.startsWith(selectedPeriod);
   });
 
   const filteredSporadicServices = sporadicServices.filter((s) => {
+    if (!validClientIds.has(s.clientId)) return false;
     if (selectedPeriod === 'all') return true;
     return s.date && s.date.startsWith(selectedPeriod);
   });

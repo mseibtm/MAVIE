@@ -246,15 +246,16 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   };
 
   const filteredBoletos = boletos.filter((b) => {
+    const client = clients.find((c) => c.id === b.clientId);
+    if (!client) return false;
     const matchClient = selectedClientId ? b.clientId === selectedClientId : true;
     const matchStatus = statusFilter === 'all' ? true : b.status === statusFilter;
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
-    const client = clients.find((c) => c.id === b.clientId);
     const matchSearch =
       b.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.id.includes(searchTerm) ||
-      (client && client.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (client && client.cpf.includes(searchTerm));
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.cpf.includes(searchTerm);
 
     return matchClient && matchStatus && matchIssueDate && matchSearch;
   });

@@ -150,11 +150,60 @@ export default function App() {
       const unsubClients = subscribeClients((cl) => {
         setClients(cl);
         saveStoredClients(cl);
+
+        if (cl && cl.length > 0) {
+          const validIds = new Set(cl.map((c) => c.id));
+          setBoletos((prev) => {
+            const orphans = prev.filter(
+              (b) =>
+                !validIds.has(b.clientId) ||
+                b.id === 'bol-101' ||
+                b.id === 'bol-102' ||
+                b.id === 'bol-201' ||
+                b.id === 'bol-301'
+            );
+            if (orphans.length > 0) {
+              orphans.forEach((b) => deleteBoletoFromFirestore(b.id));
+              const validBoletos = prev.filter(
+                (b) =>
+                  validIds.has(b.clientId) &&
+                  b.id !== 'bol-101' &&
+                  b.id !== 'bol-102' &&
+                  b.id !== 'bol-201' &&
+                  b.id !== 'bol-301'
+              );
+              saveStoredBoletos(validBoletos);
+              return validBoletos;
+            }
+            return prev;
+          });
+        }
       });
       const unsubBoletos = subscribeBoletos((remoteBoletos) => {
         setBoletos((prevLocal) => {
           const localMap = new Map<string, Boleto>(prevLocal.map((b) => [b.id, b]));
-          const mergedRemote = remoteBoletos.map((rb) => {
+          const currentClients = getStoredClients();
+          const validClientIds = new Set(currentClients.map((c) => c.id));
+
+          // Filter out mock boletos or orphans without a client
+          const cleanedRemote = remoteBoletos.filter((rb) => {
+            const isMock =
+              rb.id === 'bol-101' ||
+              rb.id === 'bol-102' ||
+              rb.id === 'bol-201' ||
+              rb.id === 'bol-301' ||
+              rb.clientId === 'cli-1' ||
+              rb.clientId === 'cli-2' ||
+              rb.clientId === 'cli-3';
+            const isOrphan = currentClients.length > 0 && !validClientIds.has(rb.clientId);
+            if (isMock || isOrphan) {
+              deleteBoletoFromFirestore(rb.id);
+              return false;
+            }
+            return true;
+          });
+
+          const mergedRemote = cleanedRemote.map((rb) => {
             const lb = localMap.get(rb.id);
             if (lb) {
               return {

@@ -38,36 +38,11 @@ function removeUndefinedFields<T extends Record<string, any>>(obj: T): T {
 }
 
 /**
- * Sync initial seed data to Firestore if collection is empty
+ * Sync initial seed data to Firestore if collection is empty (disabled to prevent dummy charges)
  */
 export async function seedFirestoreIfEmpty() {
-  try {
-    const clientsSnap = await getDocs(collection(db, COLS.CLIENTS));
-    if (clientsSnap.empty) {
-      const batch = writeBatch(db);
-      
-      INITIAL_CLIENTS.forEach((c) => {
-        batch.set(doc(db, COLS.CLIENTS, c.id), removeUndefinedFields(c));
-      });
-      INITIAL_BOLETOS.forEach((b) => {
-        batch.set(doc(db, COLS.BOLETOS, b.id), removeUndefinedFields(b));
-      });
-      INITIAL_NFES.forEach((n) => {
-        batch.set(doc(db, COLS.NFES, n.id), removeUndefinedFields(n));
-      });
-      INITIAL_TICKETS.forEach((t) => {
-        batch.set(doc(db, COLS.TICKETS, t.id), removeUndefinedFields(t));
-      });
-      INITIAL_SPORADIC_SERVICES.forEach((s) => {
-        batch.set(doc(db, COLS.SPORADIC, s.id), removeUndefinedFields(s));
-      });
-
-      await batch.commit();
-      console.log('Firebase Firestore successfully seeded with initial portal data.');
-    }
-  } catch (err) {
-    console.warn('Firestore seeding notice:', err);
-  }
+  // Never seed fictional mock data or placeholder charges into Firestore.
+  // Real data entered by the user is preserved and respected.
 }
 
 /**

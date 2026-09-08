@@ -61,89 +61,100 @@ export const touchStoredSession = () => {
   }
 };
 
+const MOCK_CLIENT_IDS = new Set(['cli-1', 'cli-2', 'cli-3']);
+const MOCK_BOLETO_IDS = new Set(['bol-101', 'bol-102', 'bol-201', 'bol-301']);
+const MOCK_NFE_IDS = new Set(['nf-101', 'nf-102', 'nf-201']);
+const MOCK_TICKET_IDS = new Set(['tkt-101', 'tkt-201', 'tkt-301']);
+const MOCK_SPORADIC_IDS = new Set(['sp-101', 'sp-102', 'sp-201']);
+
 export const getStoredClients = (): Client[] => {
   const data = localStorage.getItem(KEYS.CLIENTS);
   if (!data) {
-    localStorage.setItem(KEYS.CLIENTS, JSON.stringify(INITIAL_CLIENTS));
-    return INITIAL_CLIENTS;
+    return [];
   }
   try {
-    return JSON.parse(data);
+    const list: Client[] = JSON.parse(data);
+    return list.filter((c) => !MOCK_CLIENT_IDS.has(c.id));
   } catch {
-    return INITIAL_CLIENTS;
+    return [];
   }
 };
 
 export const saveStoredClients = (clients: Client[]) => {
-  localStorage.setItem(KEYS.CLIENTS, JSON.stringify(clients));
+  const filtered = clients.filter((c) => !MOCK_CLIENT_IDS.has(c.id));
+  localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
 };
 
 export const getStoredBoletos = (): Boleto[] => {
   const data = localStorage.getItem(KEYS.BOLETOS);
   if (!data) {
-    localStorage.setItem(KEYS.BOLETOS, JSON.stringify(INITIAL_BOLETOS));
-    return INITIAL_BOLETOS;
+    return [];
   }
   try {
-    return JSON.parse(data);
+    const list: Boleto[] = JSON.parse(data);
+    return list.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
   } catch {
-    return INITIAL_BOLETOS;
+    return [];
   }
 };
 
 export const saveStoredBoletos = (boletos: Boleto[]) => {
-  localStorage.setItem(KEYS.BOLETOS, JSON.stringify(boletos));
+  const filtered = boletos.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
+  localStorage.setItem(KEYS.BOLETOS, JSON.stringify(filtered));
 };
 
 export const getStoredNFes = (): NotaFiscal[] => {
   const data = localStorage.getItem(KEYS.NFES);
   if (!data) {
-    localStorage.setItem(KEYS.NFES, JSON.stringify(INITIAL_NFES));
-    return INITIAL_NFES;
+    return [];
   }
   try {
-    return JSON.parse(data);
+    const list: NotaFiscal[] = JSON.parse(data);
+    return list.filter((n) => !MOCK_NFE_IDS.has(n.id) && !MOCK_CLIENT_IDS.has(n.clientId));
   } catch {
-    return INITIAL_NFES;
+    return [];
   }
 };
 
 export const saveStoredNFes = (nfes: NotaFiscal[]) => {
-  localStorage.setItem(KEYS.NFES, JSON.stringify(nfes));
+  const filtered = nfes.filter((n) => !MOCK_NFE_IDS.has(n.id) && !MOCK_CLIENT_IDS.has(n.clientId));
+  localStorage.setItem(KEYS.NFES, JSON.stringify(filtered));
 };
 
 export const getStoredTickets = (): SupportTicket[] => {
   const data = localStorage.getItem(KEYS.TICKETS);
   if (!data) {
-    localStorage.setItem(KEYS.TICKETS, JSON.stringify(INITIAL_TICKETS));
-    return INITIAL_TICKETS;
+    return [];
   }
   try {
-    return JSON.parse(data);
+    const list: SupportTicket[] = JSON.parse(data);
+    return list.filter((t) => !MOCK_TICKET_IDS.has(t.id) && !MOCK_CLIENT_IDS.has(t.clientId));
   } catch {
-    return INITIAL_TICKETS;
+    return [];
   }
 };
 
 export const saveStoredTickets = (tickets: SupportTicket[]) => {
-  localStorage.setItem(KEYS.TICKETS, JSON.stringify(tickets));
+  const filtered = tickets.filter((t) => !MOCK_TICKET_IDS.has(t.id) && !MOCK_CLIENT_IDS.has(t.clientId));
+  localStorage.setItem(KEYS.TICKETS, JSON.stringify(filtered));
 };
 
 export const getStoredSporadicServices = (): SporadicService[] => {
   const data = localStorage.getItem(KEYS.SPORADIC_SERVICES);
   if (!data) {
-    localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(INITIAL_SPORADIC_SERVICES));
-    return INITIAL_SPORADIC_SERVICES;
+    return [];
   }
   try {
-    return JSON.parse(data);
+    const list: SporadicService[] = JSON.parse(data);
+    return list.filter((s) => !MOCK_SPORADIC_IDS.has(s.id) && !MOCK_CLIENT_IDS.has(s.clientId));
   } catch {
-    return INITIAL_SPORADIC_SERVICES;
+    return [];
   }
 };
 
 export const saveStoredSporadicServices = (services: SporadicService[]) => {
-  localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(services));
+  const filtered = services.filter((s) => !MOCK_SPORADIC_IDS.has(s.id) && !MOCK_CLIENT_IDS.has(s.clientId));
+  localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(filtered));
 };
 
 export const getStoredNotifications = (): AppNotification[] => {
