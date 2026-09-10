@@ -29,10 +29,12 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
   // Filter notifications relevant strictly to current user for privacy
   const userNotifications = notifications.filter((n) => {
     if (!session) return false;
-    if (session.role === 'admin') return true;
+    if (session.role === 'admin') {
+      return n.targetRole !== 'client' || !n.clientId;
+    }
     if (session.role === 'client' && session.client) {
-      // Strictly only notifications assigned to THIS client ID
-      return n.clientId === session.client.id;
+      // Strictly only notifications assigned to THIS client ID and not intended for admin only
+      return n.clientId === session.client.id && n.targetRole !== 'admin';
     }
     return false;
   });

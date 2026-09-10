@@ -295,11 +295,11 @@ export default function App() {
   // Effect to re-check due boletos periodically (e.g., when boletos state updates)
   useEffect(() => {
     if (clients.length > 0) {
-      const updatedNotifs = checkAndNotifyDueBoletos(boletos, clients);
+      const updatedNotifs = checkAndNotifyDueBoletos(boletos, clients, session);
       const cleaned = cleanupOrphanNotifications(updatedNotifs, clients, boletos);
       setNotifications(cleaned);
     }
-  }, [boletos, clients]);
+  }, [boletos, clients, session]);
 
   const addToast = (type: 'success' | 'error' | 'info', title: string, description?: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -382,13 +382,15 @@ export default function App() {
       return updated;
     });
 
-    // Notify of receipt upload
+    // Notify admin of sporadic receipt upload
     const targetService = sporadicServices.find((s) => s.id === serviceId);
     const notif: AppNotification = {
       id: `notif-rec-${Date.now()}`,
       title: 'Comprovante Enviado (Serviço Esporádico)',
       body: `Cliente enviou comprovante de pagamento para o serviço "${targetService?.description || serviceId}".`,
       type: 'system',
+      clientId: targetService?.clientId,
+      targetRole: 'admin',
       read: false,
       timestamp: new Date().toISOString(),
     };
@@ -568,9 +570,9 @@ export default function App() {
     });
     saveBoletoToFirestore(newBoleto);
 
-    // Trigger Notification for new boleto
+    // Trigger Notification for new boleto with session awareness for push isolation
     const targetClient = clients.find((c) => c.id === newBoleto.clientId);
-    const notif = notifyNewBoletoCreated(newBoleto, targetClient);
+    const notif = notifyNewBoletoCreated(newBoleto, targetClient, session);
     setNotifications((prev) => [notif, ...prev]);
 
     addToast(
@@ -593,20 +595,23 @@ export default function App() {
   };
 
   const handleSendTestNotification = () => {
+    const isClient = session?.role === 'client' && session.client;
     const title = 'Notificação de Teste';
-    const body = 'O sistema de alertas e notificações da Mavie Solution está funcionando perfeitamente!';
+    const body = isClient
+      ? `Olá ${session.client?.name}, seus alertas de boletos e vencimentos da Mavie Solution estão funcionando!`
+      : 'O sistema de alertas e notificações da Mavie Solution está funcionando perfeitamente!';
 
     // Send browser native push
     sendNativePush(`Mavie Solution - ${title}`, body, `test-notif-${Date.now()}`);
 
-    // Create in-app notification record
-    const targetClientId = session?.role === 'client' && session.client ? session.client.id : (clients[0]?.id || 'cli-1');
+    // Create in-app notification record strictly scoped to the active session user
     const newNotif: AppNotification = {
       id: `notif-test-${Date.now()}`,
       title,
       body,
-      type: 'boleto_created',
-      clientId: targetClientId,
+      type: 'system',
+      clientId: isClient ? session.client?.id : undefined,
+      targetRole: isClient ? 'client' : 'admin',
       read: false,
       timestamp: new Date().toISOString(),
     };
@@ -616,12 +621,16 @@ export default function App() {
     saveStoredNotifications(updated);
     saveNotificationToFirestore(newNotif);
 
-    addToast('success', 'Notificação Disparada!', 'Uma notificação de teste foi gerada e enviada.');
+    addToast('success', 'Notificação Disparada!', 'Uma notificação de teste foi gerada com sucesso.');
   };
 
   const handleMarkNotificationAsRead = (id: string) => {
     const updated = notifications.map((n) => {
       if (n.id === id) {
+        // Enforce privacy: a client can only mark their own notifications as read
+        if (session?.role === 'client' && session.client && n.clientId !== session.client.id) {
+          return n;
+        }
         const updatedN = { ...n, read: true };
         saveNotificationToFirestore(updatedN);
         return updatedN;
@@ -633,6 +642,23 @@ export default function App() {
   };
 
   const handleMarkAllNotificationsAsRead = () => {
+    // If logged in as a client, ONLY mark this client's notifications as read
+    if (session?.role === 'client' && session.client) {
+      const currentClientId = session.client.id;
+      const updated = notifications.map((n) => {
+        if (n.clientId === currentClientId && !n.read) {
+          const updatedN = { ...n, read: true };
+          saveNotificationToFirestore(updatedN);
+          return updatedN;
+        }
+        return n;
+      });
+      setNotifications(updated);
+      saveStoredNotifications(updated);
+      return;
+    }
+
+    // If logged in as Admin, mark admin-visible notifications as read
     const updated = notifications.map((n) => {
       const updatedN = { ...n, read: true };
       saveNotificationToFirestore(updatedN);
@@ -643,6 +669,18 @@ export default function App() {
   };
 
   const handleClearAllNotifications = () => {
+    // If logged in as a client, ONLY delete this client's notifications
+    if (session?.role === 'client' && session.client) {
+      const currentClientId = session.client.id;
+      const toDelete = notifications.filter((n) => n.clientId === currentClientId);
+      toDelete.forEach((n) => deleteNotificationFromFirestore(n.id));
+      const remaining = notifications.filter((n) => n.clientId !== currentClientId);
+      setNotifications(remaining);
+      saveStoredNotifications(remaining);
+      return;
+    }
+
+    // If logged in as Admin, clear notifications
     notifications.forEach((n) => deleteNotificationFromFirestore(n.id));
     setNotifications([]);
     saveStoredNotifications([]);
@@ -771,6 +809,25 @@ export default function App() {
       }
       return updated;
     });
+
+    // Notify admin of payment receipt upload (strictly isolated to admin)
+    const targetBoleto = existing || boletos.find((b) => b.id === boletoId);
+    if (targetBoleto) {
+      const targetClient = clients.find((c) => c.id === targetBoleto.clientId);
+      const notif: AppNotification = {
+        id: `notif-rec-bol-${Date.now()}`,
+        title: 'Comprovante de Boleto Enviado',
+        body: `Comprovante de pagamento anexado ao boleto #${boletoId} (${targetClient?.name || 'Cliente'}).`,
+        type: 'system',
+        boletoId: boletoId,
+        clientId: targetBoleto.clientId,
+        targetRole: 'admin',
+        read: false,
+        timestamp: new Date().toISOString(),
+      };
+      setNotifications((prev) => [notif, ...prev]);
+      saveNotificationToFirestore(notif);
+    }
   };
 
   const handleRemoveBoletoReceipt = (boletoId: string) => {
@@ -965,7 +1022,13 @@ export default function App() {
         onResetData={handleResetData}
         onOpenEditAdminPassword={() => setIsEditAdminPasswordModalOpen(true)}
         onOpenEditClientPassword={() => setIsEditClientPasswordModalOpen(true)}
-        notifications={notifications}
+        notifications={
+          session?.role === 'client' && session.client
+            ? notifications.filter((n) => n.clientId === session.client!.id && n.targetRole !== 'admin')
+            : session?.role === 'admin'
+            ? notifications.filter((n) => n.targetRole !== 'client' || !n.clientId)
+            : []
+        }
         pushPermission={pushPermission}
         onRequestPushPermission={handleRequestPushPermission}
         onSendTestNotification={handleSendTestNotification}

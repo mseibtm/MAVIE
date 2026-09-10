@@ -1,4 +1,4 @@
-import { Boleto, Client, AppNotification } from '../types';
+import { Boleto, Client, AppNotification, UserSession } from '../types';
 import { getStoredNotifications, saveStoredNotifications, saveStoredBoletos } from './storage';
 import { saveNotificationToFirestore, deleteNotificationFromFirestore, saveBoletoToFirestore } from '../lib/firestoreSync';
 
@@ -66,11 +66,13 @@ export function sendNativePush(title: string, body: string, tag?: string) {
 }
 
 /**
- * Trigger notification when a new boleto is registered
+ * Trigger notification when a new boleto is registered.
+ * Strictly guarantees that browser push notifications are NOT sent to other clients.
  */
 export function notifyNewBoletoCreated(
   boleto: Boleto,
-  client?: Client
+  client?: Client,
+  currentSession?: UserSession | null
 ): AppNotification {
   const clientName = client?.name || 'Cliente';
   const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boleto.amount);
@@ -81,10 +83,21 @@ export function notifyNewBoletoCreated(
   const title = 'Novo Boleto Cadastrado';
   const body = `Boleto #${boleto.id} para ${clientName} no valor de ${formattedAmount} com vencimento em ${formattedDueDate}.`;
 
-  // 1. Send native browser push notification
-  sendNativePush(`Mavie Solution - ${title}`, body, `boleto-create-${boleto.id}`);
+  // Strict push notification delivery: ONLY send native push to:
+  // 1. Admin who created the boleto
+  // 2. The specific client this boleto belongs to (if currently logged in)
+  // NEVER send push to visitors on login page or to other clients!
+  const isAuthorizedClient = currentSession?.role === 'client' && currentSession.client?.id === boleto.clientId;
+  const isAuthorizedAdmin = currentSession?.role === 'admin';
 
-  // 2. Create in-app notification record
+  if (isAuthorizedClient || isAuthorizedAdmin) {
+    const pushBody = isAuthorizedClient
+      ? `Novo boleto #${boleto.id} no valor de ${formattedAmount} com vencimento em ${formattedDueDate}.`
+      : body;
+    sendNativePush(`Mavie Solution - ${title}`, pushBody, `boleto-create-${boleto.id}`);
+  }
+
+  // 2. Create in-app notification record with explicit clientId scope
   const newNotif: AppNotification = {
     id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     title,
@@ -92,6 +105,7 @@ export function notifyNewBoletoCreated(
     type: 'boleto_created',
     boletoId: boleto.id,
     clientId: boleto.clientId,
+    targetRole: 'all',
     read: false,
     timestamp: new Date().toISOString(),
   };
@@ -105,7 +119,8 @@ export function notifyNewBoletoCreated(
 }
 
 /**
- * Clean up notifications that belong to deleted clients or deleted boletos
+ * Clean up notifications that belong to deleted clients or deleted boletos,
+ * and fix any misaligned clientId references to ensure total client isolation.
  */
 export function cleanupOrphanNotifications(
   notifications: AppNotification[],
@@ -118,18 +133,35 @@ export function cleanupOrphanNotifications(
   }
 
   const validClientIds = new Set(clients.map((c) => c.id));
-  const validBoletoIds = new Set(boletos.map((b) => b.id));
+  const boletoMap = new Map(boletos.map((b) => [b.id, b]));
 
   const orphanIds: string[] = [];
-  const cleaned = notifications.filter((n) => {
-    const isClientValid = !n.clientId || validClientIds.has(n.clientId);
-    const isBoletoValid = !n.boletoId || validBoletoIds.has(n.boletoId);
-    if (!isClientValid || !isBoletoValid) {
-      orphanIds.push(n.id);
-      return false;
+  const cleaned: AppNotification[] = [];
+
+  for (const n of notifications) {
+    // If notification has a boletoId, guarantee its clientId matches the actual boleto's clientId
+    if (n.boletoId) {
+      const boleto = boletoMap.get(n.boletoId);
+      if (!boleto) {
+        // Boleto was deleted, purge notification
+        orphanIds.push(n.id);
+        continue;
+      }
+      if (n.clientId !== boleto.clientId) {
+        // Fix misaligned clientId
+        n.clientId = boleto.clientId;
+        saveNotificationToFirestore(n);
+      }
     }
-    return true;
-  });
+
+    // If notification has a clientId, check if client still exists
+    if (n.clientId && !validClientIds.has(n.clientId)) {
+      orphanIds.push(n.id);
+      continue;
+    }
+
+    cleaned.push(n);
+  }
 
   if (orphanIds.length > 0) {
     saveStoredNotifications(cleaned);
@@ -140,11 +172,15 @@ export function cleanupOrphanNotifications(
 }
 
 /**
- * Check boletos for due dates (today or overdue) and trigger notifications
+ * Check boletos for due dates (today or overdue) and trigger notifications.
+ * CRITICAL ISOLATION:
+ * Browser push notifications are strictly filtered so that clients NEVER receive alerts
+ * belonging to other clients.
  */
 export function checkAndNotifyDueBoletos(
   boletos: Boleto[],
-  clients: Client[]
+  clients: Client[],
+  currentSession?: UserSession | null
 ): AppNotification[] {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -169,6 +205,15 @@ export function checkAndNotifyDueBoletos(
     const isDueToday = boleto.dueDate === todayStr;
     const isOverdue = boleto.dueDate < todayStr;
 
+    // Push Notification Isolation Guard:
+    // Browser push notification is ONLY permitted if:
+    // 1. Current user is Admin
+    // 2. Current user is the client who owns this boleto
+    // Strictly forbidden when another client is logged in or user is on login screen
+    const canSendPushToUser =
+      currentSession?.role === 'admin' ||
+      (currentSession?.role === 'client' && currentSession.client?.id === boleto.clientId);
+
     if (isDueToday) {
       // Check if we already notified for this boleto today
       const alreadyNotifiedToday = existingNotifications.some(
@@ -179,7 +224,12 @@ export function checkAndNotifyDueBoletos(
         const title = 'Boleto Vence Hoje!';
         const body = `Atenção: O boleto #${boleto.id} (${clientName}) no valor de ${formattedAmount} vence hoje (${formattedDueDate}).`;
 
-        sendNativePush(`Mavie Solution - ${title}`, body, `boleto-due-${boleto.id}-${todayStr}`);
+        if (canSendPushToUser) {
+          const pushBody = currentSession?.role === 'client'
+            ? `Atenção: Seu boleto #${boleto.id} no valor de ${formattedAmount} vence hoje (${formattedDueDate}).`
+            : body;
+          sendNativePush(`Mavie Solution - ${title}`, pushBody, `boleto-due-${boleto.id}-${todayStr}`);
+        }
 
         const notif: AppNotification = {
           id: `notif-due-${boleto.id}-${Date.now()}`,
@@ -188,6 +238,7 @@ export function checkAndNotifyDueBoletos(
           type: 'due_date',
           boletoId: boleto.id,
           clientId: boleto.clientId,
+          targetRole: 'all',
           read: false,
           timestamp: new Date().toISOString(),
         };
@@ -204,7 +255,12 @@ export function checkAndNotifyDueBoletos(
         const title = 'Boleto Em Atraso';
         const body = `Aviso: O boleto #${boleto.id} (${clientName}) de ${formattedAmount} venceu em ${formattedDueDate} e consta pendente.`;
 
-        sendNativePush(`Mavie Solution - ${title}`, body, `boleto-overdue-${boleto.id}-${todayStr}`);
+        if (canSendPushToUser) {
+          const pushBody = currentSession?.role === 'client'
+            ? `Aviso: Seu boleto #${boleto.id} de ${formattedAmount} venceu em ${formattedDueDate} e consta pendente.`
+            : body;
+          sendNativePush(`Mavie Solution - ${title}`, pushBody, `boleto-overdue-${boleto.id}-${todayStr}`);
+        }
 
         const notif: AppNotification = {
           id: `notif-overdue-${boleto.id}-${Date.now()}`,
@@ -213,6 +269,7 @@ export function checkAndNotifyDueBoletos(
           type: 'overdue',
           boletoId: boleto.id,
           clientId: boleto.clientId,
+          targetRole: 'all',
           read: false,
           timestamp: new Date().toISOString(),
         };

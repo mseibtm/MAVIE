@@ -93,6 +93,7 @@ export interface AppNotification {
   type: 'boleto_created' | 'due_date' | 'overdue' | 'system';
   boletoId?: string;
   clientId?: string;
+  targetRole?: 'admin' | 'client' | 'all';
   read: boolean;
   timestamp: string;
 }
