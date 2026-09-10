@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { CreditCard, QrCode, Copy, Check, Eye, AlertTriangle, CheckCircle2, Clock, Calendar, Upload, Download, FileCheck, FileText } from 'lucide-react';
+import { CreditCard, QrCode, Copy, Check, Eye, AlertTriangle, CheckCircle2, Clock, Calendar, Upload, Download, FileCheck, FileText, FileDown } from 'lucide-react';
 import { Boleto, Client, PDFAttachment } from '../../types';
 import { BoletoModal } from '../modals/BoletoModal';
+import { downloadBoletoFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
 
 interface ClientBoletosViewProps {
   client: Client;
@@ -335,20 +336,31 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                      <a
-                        href={boleto.paymentReceipt.dataUrl}
-                        download={boleto.paymentReceipt.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (boleto.paymentReceipt?.dataUrl) {
+                            const success = downloadDataUrl(
+                              boleto.paymentReceipt.dataUrl,
+                              boleto.paymentReceipt.name || `Comprovante_${boleto.id}`
+                            );
+                            if (success) {
+                              onToast('success', 'Download Iniciado', 'Baixando comprovante de pagamento...');
+                            } else {
+                              onToast('error', 'Erro ao baixar', 'Não foi possível baixar o comprovante.');
+                            }
+                          }
+                        }}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                        title="Baixar comprovante de pagamento"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Baixar</span>
-                      </a>
+                      </button>
                       {onUploadReceipt && (
                         <button
                           onClick={() => triggerReceiptUpload(boleto.id)}
-                          className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-lg border border-amber-500/30 transition-colors"
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-lg border border-amber-500/30 transition-colors cursor-pointer"
                         >
                           <Upload className="w-3.5 h-3.5" />
                           <span>Alterar</span>
@@ -364,7 +376,7 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                     {onUploadReceipt && (
                       <button
                         onClick={() => triggerReceiptUpload(boleto.id)}
-                        className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-md shadow-amber-500/10"
+                        className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-all shadow-md shadow-amber-500/10 cursor-pointer"
                       >
                         <Upload className="w-4 h-4" />
                         <span>Anexar Comprovante</span>
@@ -376,30 +388,30 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                 {/* Action Buttons */}
                 {!isPaid && (
                   <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-end gap-2">
-                    {boleto.pdfFile && (
-                      <a
-                        href={boleto.pdfFile.dataUrl}
-                        download={boleto.pdfFile.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-red-600/20"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span>Baixar Boleto (PDF)</span>
-                      </a>
-                    )}
+                    {/* Always visible and reliable Boleto PDF Download button */}
+                    <button
+                      type="button"
+                      onClick={() => downloadBoletoFile(boleto, client, onToast)}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-red-600/20 active:scale-95 cursor-pointer"
+                      title="Baixar Boleto Bancário em PDF"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Baixar Boleto (PDF)</span>
+                    </button>
 
                     <button
+                      type="button"
                       onClick={() => handleCopyPix(boleto.pixKey)}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-emerald-600/20 active:scale-95 cursor-pointer"
                     >
                       <QrCode className="w-4 h-4" />
                       <span>Pagar via PIX</span>
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => setSelectedBoleto(boleto)}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold rounded-xl border border-slate-700 transition-colors"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-bold rounded-xl border border-slate-700 transition-colors cursor-pointer"
                     >
                       <Eye className="w-4 h-4 text-sky-400" />
                       <span>Visualizar Boleto</span>
@@ -408,12 +420,23 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                 )}
 
                 {isPaid && (
-                  <div className="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+                  <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center justify-end gap-2">
                     <button
-                      onClick={() => setSelectedBoleto(boleto)}
-                      className="flex items-center gap-2 text-xs font-bold text-sky-400 hover:text-sky-300 transition-colors"
+                      type="button"
+                      onClick={() => downloadBoletoFile(boleto, client, onToast)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-bold rounded-xl border border-slate-700 transition-colors cursor-pointer"
+                      title="Baixar 2ª via do boleto em PDF"
                     >
-                      <Eye className="w-4 h-4" />
+                      <FileDown className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Baixar 2ª Via (PDF)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBoleto(boleto)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-800 text-sky-400 hover:text-sky-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
                       <span>Ver Comprovante / Via do Boleto</span>
                     </button>
                   </div>

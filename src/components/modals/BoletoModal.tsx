@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2, ExternalLink, Calendar, Trash2, Edit3, Image as ImageIcon } from 'lucide-react';
+import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2, ExternalLink, Calendar, Trash2, Edit3, Image as ImageIcon, Barcode, ShieldCheck } from 'lucide-react';
 import { Boleto, Client, PDFAttachment } from '../../types';
 import { formatCPF, cleanCPF } from '../../utils/cpf';
+import { downloadBoletoFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
 
 interface BoletoModalProps {
   boleto: Boleto;
@@ -95,21 +96,19 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {boleto.pdfFile && (
-              <a
-                href={boleto.pdfFile.dataUrl}
-                download={boleto.pdfFile.name}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors shadow-sm"
-              >
-                <Download className="w-4 h-4" />
-                <span>Baixar PDF</span>
-              </a>
-            )}
+            <button
+              type="button"
+              onClick={() => downloadBoletoFile(boleto, client)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors shadow-sm cursor-pointer"
+              title="Baixar Boleto Bancário em PDF"
+            >
+              <Download className="w-4 h-4" />
+              <span>Baixar PDF</span>
+            </button>
+
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg transition-colors border border-slate-700"
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg transition-colors border border-slate-700 cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Imprimir</span>
@@ -252,16 +251,18 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <a
-                      href={boleto.paymentReceipt.dataUrl}
-                      download={boleto.paymentReceipt.name}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (boleto.paymentReceipt?.dataUrl) {
+                          downloadDataUrl(boleto.paymentReceipt.dataUrl, boleto.paymentReceipt.name || `Comprovante_${boleto.id}`);
+                        }
+                      }}
+                      className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Baixar / Abrir</span>
-                    </a>
+                      <span>Baixar Comprovante</span>
+                    </button>
 
                     {onRemoveReceipt && (
                       <button
@@ -270,7 +271,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                             onRemoveReceipt(boleto.id);
                           }
                         }}
-                        className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors"
+                        className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors cursor-pointer"
                         title="Remover Comprovante"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -299,8 +300,8 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             )}
           </div>
 
-          {/* Embedded PDF Viewer OR Summary Card */}
-          {boleto.pdfFile ? (
+          {/* Embedded PDF Viewer OR Visual Boleto Slip with Direct Download */}
+          {boleto.pdfFile && !boleto.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]') ? (
             <div className="space-y-3">
               <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
                 <div className="flex items-center gap-3">
@@ -309,32 +310,23 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white">{boleto.pdfFile.name}</h4>
-                    <p className="text-[11px] text-slate-400">Boleto oficial em formato PDF</p>
+                    <p className="text-[11px] text-slate-400">Boleto oficial em formato PDF anexado</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <a
-                    href={boleto.pdfFile.dataUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors border border-slate-700 flex items-center justify-center gap-1.5"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Abrir em Nova Aba</span>
-                  </a>
-                  <a
-                    href={boleto.pdfFile.dataUrl}
-                    download={boleto.pdfFile.name}
-                    className="flex-1 sm:flex-none px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors shadow flex items-center justify-center gap-1.5"
+                  <button
+                    type="button"
+                    onClick={() => downloadBoletoFile(boleto, client)}
+                    className="flex-1 sm:flex-none px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition-colors shadow flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Baixar PDF</span>
-                  </a>
+                  </button>
                 </div>
               </div>
 
               {/* Embedded PDF iframe */}
-              <div className="w-full h-[550px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-300 shadow-inner">
+              <div className="w-full h-[500px] bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-300 shadow-inner">
                 <iframe
                   src={boleto.pdfFile.dataUrl}
                   className="w-full h-full border-0"
@@ -343,33 +335,100 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
               </div>
             </div>
           ) : (
-            <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Resumo dos Dados da Cobrança
-              </h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-400 block font-medium text-[11px]">Valor do Documento</span>
-                  <span className="font-extrabold text-slate-900 text-sm">{formattedAmount}</span>
+            <div className="space-y-4">
+              {/* Call-to-action download banner */}
+              <div className="p-4 bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-slate-700 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-red-600/20 border border-red-500/40 rounded-xl text-red-400 shrink-0">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white">Boleto Bancário Pronto para Pagamento</h4>
+                    <p className="text-xs text-slate-300">
+                      Baixe o PDF oficial ou imprima a via para pagar no seu banco ou aplicativo.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-400 block font-medium text-[11px]">Vencimento</span>
-                  <span className="font-extrabold text-rose-700 text-sm">{formattedDueDate}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium text-[11px]">Sacado (Cliente)</span>
-                  <span className="font-bold text-slate-800">{client ? client.name : 'Cliente Registrado'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block font-medium text-[11px]">{docLabel}</span>
-                  <span className="font-mono text-slate-700">{client ? formatCPF(client.cpf) : '-'}</span>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => downloadBoletoFile(boleto, client)}
+                    className="flex-1 sm:flex-none px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-black rounded-xl shadow-lg shadow-red-600/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Baixar Boleto Oficial (PDF)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="flex-1 sm:flex-none px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Imprimir</span>
+                  </button>
                 </div>
               </div>
-              {boleto.description && (
-                <div className="pt-2 border-t border-slate-200 text-xs text-slate-600">
-                  <span className="font-bold">Descrição / Ref:</span> {boleto.description}
+
+              {/* Visual Boleto Slip (Ficha de Compensação Visual) */}
+              <div className="p-5 bg-white border-2 border-slate-300 rounded-xl shadow-sm space-y-4 font-sans text-slate-800">
+                {/* Bank line header */}
+                <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-base text-slate-900 tracking-tight">Banco do Brasil</span>
+                    <span className="font-bold text-base px-2 border-x-2 border-slate-800">001-9</span>
+                  </div>
+                  <div className="font-mono font-bold text-xs sm:text-sm text-slate-900">
+                    {boleto.lineDigitable}
+                  </div>
                 </div>
-              )}
+
+                {/* Grid details */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Beneficiário</span>
+                    <span className="font-bold text-slate-900 block truncate">MAVIE SOLUTION LTDA</span>
+                    <span className="text-[11px] text-slate-500">CNPJ: 32.922.555/0001-87</span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Pagador (Sacado)</span>
+                    <span className="font-bold text-slate-900 block truncate">{client ? client.name : 'Cliente'}</span>
+                    <span className="text-[11px] text-slate-500">{docLabel}: {client ? formatCPF(client.cpf) : '-'}</span>
+                  </div>
+
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg">
+                    <span className="text-[10px] text-rose-600 font-bold uppercase block">Vencimento</span>
+                    <span className="font-black text-rose-700 text-sm">{formattedDueDate}</span>
+                    <span className="text-[10px] text-rose-500 block">Aceitar até o vencimento</span>
+                  </div>
+
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <span className="text-[10px] text-emerald-600 font-bold uppercase block">Valor do Documento</span>
+                    <span className="font-black text-emerald-700 text-sm">{formattedAmount}</span>
+                    <span className="text-[10px] text-emerald-600 block">Desconto / Mora sob condições</span>
+                  </div>
+                </div>
+
+                {boleto.description && (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Descrição do Serviço</span>
+                    <span className="text-slate-800 font-medium">{boleto.description}</span>
+                  </div>
+                )}
+
+                {/* Visual barcode representation */}
+                <div className="pt-3 border-t border-slate-200 flex flex-col items-center justify-center gap-1.5">
+                  <div className="h-10 w-full max-w-md flex items-stretch justify-center gap-[2px] px-2 py-1 bg-white border border-slate-200 rounded">
+                    {Array.from({ length: 55 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`bg-slate-950 ${i % 3 === 0 ? 'w-1' : i % 5 === 0 ? 'w-1.5' : 'w-0.5'}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="font-mono text-[11px] text-slate-500">{boleto.barcode || '34191800070123456789012345678901891230000145000'}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
