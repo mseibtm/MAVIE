@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Briefcase, Plus } from 'lucide-react';
-import { Client, SporadicService } from '../../types';
+import { Client, SporadicService, PDFAttachment } from '../../types';
+import { PDFUploader } from '../common/PDFUploader';
 
 interface SporadicServiceModalProps {
   isOpen: boolean;
@@ -24,8 +25,10 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
   const [newCategory, setNewCategory] = useState<string>('Serviço Avulso');
   const [newAmount, setNewAmount] = useState<string>('');
   const [newDate, setNewDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [newDueDate, setNewDueDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [newStatus, setNewStatus] = useState<'realized' | 'pending'>('pending');
   const [newNotes, setNewNotes] = useState<string>('');
+  const [newPdfFile, setNewPdfFile] = useState<PDFAttachment | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,9 +37,12 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
       setNewDescription('');
       setNewCategory('Serviço Avulso');
       setNewAmount('');
-      setNewDate(new Date().toISOString().split('T')[0]);
+      const today = new Date().toISOString().split('T')[0];
+      setNewDate(today);
+      setNewDueDate(today);
       setNewStatus('pending');
       setNewNotes('');
+      setNewPdfFile(null);
     }
   }, [isOpen, initialClientId, clients]);
 
@@ -67,24 +73,29 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
       category: newCategory,
       amount: val,
       date: newDate,
+      dueDate: newDueDate || newDate,
       status: newStatus,
       notes: newNotes.trim() || undefined,
+      pdfFile: newPdfFile || undefined,
     });
 
-    onToast('success', 'Serviço Registrado!', 'O lançamento do serviço esporádico foi adicionado com sucesso.');
+    onToast('success', 'Serviço Registrado!', 'O lançamento do serviço esporádico e boleto foram adicionados com sucesso.');
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center justify-between border-b border-slate-800 p-5 bg-slate-950 shrink-0">
           <div className="flex items-center gap-2">
             <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
               <Briefcase className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-bold text-white">Novo Lançamento de Serviço Esporádico</h3>
+            <div>
+              <h3 className="text-base font-bold text-white">Novo Serviço Esporádico & Boleto</h3>
+              <p className="text-[11px] text-slate-400">Lance serviços avulsos com inserção do PDF do boleto bancário</p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -96,7 +107,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
           {/* Client Selection */}
           <div>
             <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
@@ -108,9 +119,10 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
               className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
               required
             >
+              <option value="" disabled>Selecione um cliente...</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.cpf})
+                  {c.name} {c.company ? `(${c.company})` : ''} - CPF: {c.cpf}
                 </option>
               ))}
             </select>
@@ -125,7 +137,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
               type="text"
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
-              placeholder="Ex: Consultoria de Módulo, Suporte Presencial, Serviço Elétrico..."
+              placeholder="Ex: Consultoria Técnica, Troca de Disjuntores, Configuração de Rede..."
               className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium placeholder-slate-600 focus:ring-2 focus:ring-amber-500"
               required
             />
@@ -146,7 +158,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
                 <option value="Consultoria">Consultoria</option>
                 <option value="Treinamento">Treinamento</option>
                 <option value="Suporte Técnico">Suporte Técnico</option>
-                <option value="Desenvolvimento">Desenvolvimento</option>
+                <option value="Instalação / Configuração">Instalação / Configuração</option>
                 <option value="Serviço Elétrico">Serviço Elétrico</option>
                 <option value="Outros">Outros</option>
               </select>
@@ -167,34 +179,56 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
             </div>
           </div>
 
-          {/* Date & Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Date, Due Date & Status */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                Data da Execução/Fatura *
+                Data do Lançamento *
               </label>
               <input
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:ring-2 focus:ring-amber-500 text-[11px]"
                 required
               />
             </div>
 
             <div>
               <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                Status do Pagamento
+                Vencimento do Boleto
+              </label>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:ring-2 focus:ring-amber-500 text-[11px]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
+                Status Inicial
               </label>
               <select
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value as 'realized' | 'pending')}
-                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500 text-[11px]"
               >
-                <option value="pending">Pendente (Aguardando acerto)</option>
-                <option value="realized">Realizado (Pago / Quitado)</option>
+                <option value="pending">Pendente (A Pagar)</option>
+                <option value="realized">Realizado (Pago)</option>
               </select>
             </div>
+          </div>
+
+          {/* PDF Uploader for Boleto */}
+          <div className="pt-2">
+            <PDFUploader
+              currentFile={newPdfFile || undefined}
+              onFileChange={setNewPdfFile}
+              label="Upload do Boleto em PDF (Opcional - Igual aos Boletos Mensais)"
+              onToast={onToast}
+            />
           </div>
 
           {/* Notes */}
@@ -207,7 +241,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
               onChange={(e) => setNewNotes(e.target.value)}
               rows={2}
               placeholder="Informações adicionais do atendimento..."
-              className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium placeholder-slate-600 focus:ring-2 focus:ring-amber-500"
+              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium placeholder-slate-600 focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -225,7 +259,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
               className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>Cadastrar Serviço Esporádico</span>
+              <span>Cadastrar Serviço & Boleto</span>
             </button>
           </div>
         </form>

@@ -52,6 +52,7 @@ import { AdminLoginModal } from './components/modals/AdminLoginModal';
 
 // Client components
 import { ClientBoletosView } from './components/client/ClientBoletosView';
+import { ClientSporadicBoletosView } from './components/client/ClientSporadicBoletosView';
 import { ClientNFesView } from './components/client/ClientNFesView';
 import { ClientTicketsView } from './components/client/ClientTicketsView';
 
@@ -247,9 +248,27 @@ export default function App() {
         setTickets(tk);
         saveStoredTickets(tk);
       });
-      const unsubSporadic = subscribeSporadicServices((sp) => {
-        setSporadicServices(sp);
-        saveStoredSporadicServices(sp);
+      const unsubSporadic = subscribeSporadicServices((remoteSporadic) => {
+        setSporadicServices((prevLocal) => {
+          const localMap = new Map<string, SporadicService>(prevLocal.map((s) => [s.id, s]));
+          const mergedRemote = remoteSporadic.map((rs) => {
+            const ls = localMap.get(rs.id);
+            if (ls) {
+              return {
+                ...rs,
+                pdfFile: (ls.pdfFile?.dataUrl && !ls.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                  ? ls.pdfFile
+                  : rs.pdfFile,
+                paymentReceipt: (ls.paymentReceipt?.dataUrl && !ls.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                  ? ls.paymentReceipt
+                  : rs.paymentReceipt,
+              };
+            }
+            return rs;
+          });
+          saveStoredSporadicServices(mergedRemote);
+          return mergedRemote;
+        });
       });
       const unsubNotifs = subscribeNotifications((nt) => {
         setNotifications((prevNotifs) => {
@@ -342,6 +361,98 @@ export default function App() {
       return updated;
     });
     deleteSporadicServiceFromFirestore(id);
+  };
+
+  const handleUploadSporadicReceipt = (serviceId: string, receipt: PDFAttachment) => {
+    let updatedItem: SporadicService | undefined;
+    setSporadicServices((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === serviceId) {
+          const item: SporadicService = {
+            ...s,
+            paymentReceipt: receipt,
+          };
+          updatedItem = item;
+          return item;
+        }
+        return s;
+      });
+      saveStoredSporadicServices(updated);
+      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
+      return updated;
+    });
+
+    // Notify of receipt upload
+    const targetService = sporadicServices.find((s) => s.id === serviceId);
+    const notif: AppNotification = {
+      id: `notif-rec-${Date.now()}`,
+      title: 'Comprovante Enviado (Serviço Esporádico)',
+      body: `Cliente enviou comprovante de pagamento para o serviço "${targetService?.description || serviceId}".`,
+      type: 'system',
+      read: false,
+      timestamp: new Date().toISOString(),
+    };
+    setNotifications((prev) => [notif, ...prev]);
+    saveNotificationToFirestore(notif);
+  };
+
+  const handleRemoveSporadicReceipt = (serviceId: string) => {
+    let updatedItem: SporadicService | undefined;
+    setSporadicServices((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === serviceId) {
+          const { paymentReceipt, ...rest } = s;
+          const item = rest as SporadicService;
+          updatedItem = item;
+          return item;
+        }
+        return s;
+      });
+      saveStoredSporadicServices(updated);
+      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
+      return updated;
+    });
+    addToast('info', 'Comprovante Removido', 'O comprovante foi removido do serviço esporádico.');
+  };
+
+  const handleUploadSporadicBoletoPdf = (serviceId: string, pdfFile: PDFAttachment) => {
+    let updatedItem: SporadicService | undefined;
+    setSporadicServices((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === serviceId) {
+          const item: SporadicService = {
+            ...s,
+            pdfFile,
+          };
+          updatedItem = item;
+          return item;
+        }
+        return s;
+      });
+      saveStoredSporadicServices(updated);
+      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
+      return updated;
+    });
+    addToast('success', 'PDF do Boleto Inserido!', 'O arquivo PDF do boleto foi anexado com sucesso ao serviço.');
+  };
+
+  const handleRemoveSporadicBoletoPdf = (serviceId: string) => {
+    let updatedItem: SporadicService | undefined;
+    setSporadicServices((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === serviceId) {
+          const { pdfFile, ...rest } = s;
+          const item = rest as SporadicService;
+          updatedItem = item;
+          return item;
+        }
+        return s;
+      });
+      saveStoredSporadicServices(updated);
+      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
+      return updated;
+    });
+    addToast('info', 'PDF Removido', 'O PDF do boleto bancário foi removido.');
   };
 
   // Login Handlers
@@ -881,6 +992,15 @@ export default function App() {
               />
             )}
 
+            {activeTab === 'sporadic' && (
+              <ClientSporadicBoletosView
+                client={session.client}
+                sporadicServices={sporadicServices}
+                onUploadReceipt={handleUploadSporadicReceipt}
+                onToast={addToast}
+              />
+            )}
+
             {activeTab === 'nfes' && (
               <ClientNFesView
                 client={session.client}
@@ -944,6 +1064,10 @@ export default function App() {
                 onAddSporadicService={handleAddSporadicService}
                 onUpdateSporadicStatus={handleUpdateSporadicStatus}
                 onDeleteSporadicService={handleDeleteSporadicService}
+                onUploadSporadicBoletoPdf={handleUploadSporadicBoletoPdf}
+                onRemoveSporadicBoletoPdf={handleRemoveSporadicBoletoPdf}
+                onUploadSporadicReceipt={handleUploadSporadicReceipt}
+                onRemoveSporadicReceipt={handleRemoveSporadicReceipt}
                 onToast={addToast}
               />
             )}

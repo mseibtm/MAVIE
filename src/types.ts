@@ -107,9 +107,16 @@ export interface SporadicService {
   clientId: string;
   description: string;
   amount: number;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (Data de execução/registro)
+  dueDate?: string; // YYYY-MM-DD (Data de vencimento do boleto esporádico)
   status: 'realized' | 'pending';
   category?: string;
   notes?: string;
+  pdfFile?: PDFAttachment; // PDF do boleto inserido pelo gestor
+  paymentReceipt?: PDFAttachment; // Comprovante de pagamento anexado
+  paidAt?: string;
+  lineDigitable?: string;
+  pixKey?: string;
+  barcode?: string;
   createdAt: string;
 }

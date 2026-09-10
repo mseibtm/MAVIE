@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, User, LogOut, FileText, Ticket, CreditCard, LayoutDashboard, RefreshCw, TrendingUp, KeyRound } from 'lucide-react';
+import { ShieldCheck, User, LogOut, FileText, Ticket, CreditCard, LayoutDashboard, RefreshCw, TrendingUp, KeyRound, Briefcase } from 'lucide-react';
 import { UserSession, AppNotification } from '../types';
 import { MavieLogo } from './MavieLogo';
 import { NotificationBell } from './notifications/NotificationBell';
@@ -66,7 +66,18 @@ export const Header: React.FC<HeaderProps> = ({
                     }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
-                    <span>Boletos & Pagamentos</span>
+                    <span>Boletos Mensais</span>
+                  </button>
+                  <button
+                    onClick={() => onTabChange('sporadic')}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      activeTab === 'sporadic'
+                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>Boletos Esporádicos</span>
                   </button>
                   <button
                     onClick={() => onTabChange('nfes')}
@@ -273,7 +284,15 @@ export const Header: React.FC<HeaderProps> = ({
                     activeTab === 'boletos' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'
                   }`}
                 >
-                  Boletos
+                  Boletos Mensais
+                </button>
+                <button
+                  onClick={() => onTabChange('sporadic')}
+                  className={`px-3 py-1 text-xs font-medium rounded-lg whitespace-nowrap ${
+                    activeTab === 'sporadic' ? 'bg-amber-500 text-slate-950 font-bold' : 'text-slate-400'
+                  }`}
+                >
+                  Boletos Esporádicos
                 </button>
                 <button
                   onClick={() => onTabChange('nfes')}

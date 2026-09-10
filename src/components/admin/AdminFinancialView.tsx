@@ -19,6 +19,11 @@ import {
   Check,
   Receipt,
   FileSpreadsheet,
+  FileText,
+  Eye,
+  Download,
+  Upload,
+  ExternalLink,
 } from 'lucide-react';
 import {
   BarChart,
@@ -30,7 +35,8 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { Client, Boleto, SporadicService } from '../../types';
+import { Client, Boleto, SporadicService, PDFAttachment } from '../../types';
+import { SporadicServiceModal } from '../modals/SporadicServiceModal';
 
 interface AdminFinancialViewProps {
   clients: Client[];
@@ -40,6 +46,10 @@ interface AdminFinancialViewProps {
   onAddSporadicService: (service: Omit<SporadicService, 'id' | 'createdAt'>) => void;
   onUpdateSporadicStatus: (id: string, status: 'realized' | 'pending') => void;
   onDeleteSporadicService: (id: string) => void;
+  onUploadSporadicBoletoPdf?: (serviceId: string, pdfFile: PDFAttachment) => void;
+  onRemoveSporadicBoletoPdf?: (serviceId: string) => void;
+  onUploadSporadicReceipt?: (serviceId: string, receipt: PDFAttachment) => void;
+  onRemoveSporadicReceipt?: (serviceId: string) => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -51,6 +61,10 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   onAddSporadicService,
   onUpdateSporadicStatus,
   onDeleteSporadicService,
+  onUploadSporadicBoletoPdf,
+  onRemoveSporadicBoletoPdf,
+  onUploadSporadicReceipt,
+  onRemoveSporadicReceipt,
   onToast,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'realized' | 'mrr' | 'sporadic'>('realized');
@@ -60,13 +74,72 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
   // Modal State for New Sporadic Service
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newClientId, setNewClientId] = useState(clients[0]?.id || '');
-  const [newDescription, setNewDescription] = useState('');
-  const [newCategory, setNewCategory] = useState('Consultoria');
-  const [newAmount, setNewAmount] = useState('');
-  const [newDate, setNewDate] = useState(new Date().toISOString().substring(0, 10));
-  const [newStatus, setNewStatus] = useState<'realized' | 'pending'>('realized');
-  const [newNotes, setNewNotes] = useState('');
+
+  // Viewing attachment modal (Boleto PDF or Payment receipt)
+  const [viewingAttachment, setViewingAttachment] = useState<{ title: string; attachment: PDFAttachment } | null>(null);
+  const [uploadingPdfForServiceId, setUploadingPdfForServiceId] = useState<string | null>(null);
+  const [uploadingReceiptForServiceId, setUploadingReceiptForServiceId] = useState<string | null>(null);
+  const boletoPdfInputRef = React.useRef<HTMLInputElement>(null);
+  const receiptInputRef = React.useRef<HTMLInputElement>(null);
+
+  const triggerUploadBoletoPdf = (serviceId: string) => {
+    setUploadingPdfForServiceId(serviceId);
+    if (boletoPdfInputRef.current) {
+      boletoPdfInputRef.current.value = '';
+      boletoPdfInputRef.current.click();
+    }
+  };
+
+  const handleBoletoPdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingPdfForServiceId || !onUploadSporadicBoletoPdf) return;
+    if (file.size > 12 * 1024 * 1024) {
+      onToast('error', 'Arquivo Muito Grande', 'O PDF do boleto deve ter no máximo 12MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const attachment: PDFAttachment = {
+        name: file.name,
+        size: file.size,
+        dataUrl: reader.result as string,
+        uploadedAt: new Date().toISOString(),
+      };
+      onUploadSporadicBoletoPdf(uploadingPdfForServiceId, attachment);
+      setUploadingPdfForServiceId(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const triggerUploadReceipt = (serviceId: string) => {
+    setUploadingReceiptForServiceId(serviceId);
+    if (receiptInputRef.current) {
+      receiptInputRef.current.value = '';
+      receiptInputRef.current.click();
+    }
+  };
+
+  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingReceiptForServiceId || !onUploadSporadicReceipt) return;
+    if (file.size > 12 * 1024 * 1024) {
+      onToast('error', 'Arquivo Muito Grande', 'O comprovante deve ter no máximo 12MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const attachment: PDFAttachment = {
+        name: file.name,
+        size: file.size,
+        dataUrl: reader.result as string,
+        uploadedAt: new Date().toISOString(),
+      };
+      onUploadSporadicReceipt(uploadingReceiptForServiceId, attachment);
+      onToast('success', 'Comprovante Anexado', `Comprovante (${file.name}) salvo com sucesso.`);
+      setUploadingReceiptForServiceId(null);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Format BRL
   const formatCurrency = (val: number) =>
@@ -200,37 +273,6 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   };
 
   const chartData = getMonthlyChartData();
-
-  // Create Sporadic Service submit
-  const handleCreateSporadicService = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClientId || !newDescription.trim() || !newAmount) {
-      onToast('error', 'Campos Obrigatórios', 'Preencha o cliente, a descrição e o valor do serviço.');
-      return;
-    }
-
-    const val = parseFloat(newAmount.replace(',', '.'));
-    if (isNaN(val) || val <= 0) {
-      onToast('error', 'Valor Inválido', 'Insira um valor numérico positivo.');
-      return;
-    }
-
-    onAddSporadicService({
-      clientId: newClientId,
-      description: newDescription.trim(),
-      category: newCategory,
-      amount: val,
-      date: newDate,
-      status: newStatus,
-      notes: newNotes.trim() || undefined,
-    });
-
-    onToast('success', 'Serviço Registrado', 'O lançamento do serviço esporádico foi adicionado ao faturamento.');
-    setIsModalOpen(false);
-    setNewDescription('');
-    setNewAmount('');
-    setNewNotes('');
-  };
 
   return (
     <div className="space-y-6">
@@ -639,11 +681,13 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
                   <tr>
-                    <th className="p-4">Data</th>
+                    <th className="p-4">Data & Vencimento</th>
                     <th className="p-4">Cliente / Contratante</th>
                     <th className="p-4">Categoria</th>
                     <th className="p-4">Descrição do Serviço</th>
                     <th className="p-4">Valor (R$)</th>
+                    <th className="p-4">Boleto (PDF)</th>
+                    <th className="p-4">Comprovante</th>
                     <th className="p-4">Situação</th>
                     <th className="p-4 text-center">Ações</th>
                   </tr>
@@ -654,8 +698,16 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
                     return (
                       <tr key={s.id} className="hover:bg-slate-850/60 transition-colors">
-                        <td className="p-4 font-mono text-slate-300 font-semibold">
-                          {new Date(s.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        <td className="p-4 font-mono">
+                          <div className="text-slate-300 font-semibold">
+                            {new Date(s.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          </div>
+                          {s.dueDate && (
+                            <div className="text-[10px] text-amber-400/90 font-medium flex items-center gap-1 mt-0.5">
+                              <Calendar className="w-3 h-3 text-amber-400" />
+                              <span>Venc: {new Date(s.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          )}
                         </td>
 
                         <td className="p-4">
@@ -676,6 +728,108 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
                         <td className="p-4 font-mono font-black text-amber-400 text-sm">
                           {formatCurrency(s.amount)}
+                        </td>
+
+                        {/* Boleto PDF Column */}
+                        <td className="p-4">
+                          {s.pdfFile ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() =>
+                                  setViewingAttachment({
+                                    title: `Boleto Bancário - ${s.description}`,
+                                    attachment: s.pdfFile!,
+                                  })
+                                }
+                                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                                title="Visualizar PDF do Boleto"
+                              >
+                                <Eye className="w-3 h-3 text-amber-400" />
+                                <span>Ver PDF</span>
+                              </button>
+                              <a
+                                href={s.pdfFile.dataUrl}
+                                download={s.pdfFile.name}
+                                className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                                title={`Baixar ${s.pdfFile.name}`}
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                              {onRemoveSporadicBoletoPdf && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Deseja remover o PDF do boleto deste serviço esporádico?')) {
+                                      onRemoveSporadicBoletoPdf(s.id);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                                  title="Remover PDF"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => triggerUploadBoletoPdf(s.id)}
+                              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-dashed border-slate-600 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-colors"
+                              title="Anexar arquivo PDF do boleto para o cliente baixar"
+                            >
+                              <Upload className="w-3 h-3 text-amber-400" />
+                              <span>+ Inserir PDF</span>
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Payment Receipt Column */}
+                        <td className="p-4">
+                          {s.paymentReceipt ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() =>
+                                  setViewingAttachment({
+                                    title: `Comprovante - ${s.description}`,
+                                    attachment: s.paymentReceipt!,
+                                  })
+                                }
+                                className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                                title="Visualizar comprovante de pagamento"
+                              >
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                <span>Ver Anexo</span>
+                              </button>
+                              <a
+                                href={s.paymentReceipt.dataUrl}
+                                download={s.paymentReceipt.name}
+                                className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                                title={`Baixar ${s.paymentReceipt.name}`}
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </a>
+                              {onRemoveSporadicReceipt && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm('Deseja remover o comprovante deste serviço esporádico?')) {
+                                      onRemoveSporadicReceipt(s.id);
+                                    }
+                                  }}
+                                  className="p-1 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                                  title="Remover Comprovante"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => triggerUploadReceipt(s.id)}
+                              className="px-2 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors"
+                              title="Anexar comprovante de pagamento recebido"
+                            >
+                              <Upload className="w-3 h-3 text-slate-400" />
+                              <span>+ Anexar</span>
+                            </button>
+                          )}
                         </td>
 
                         <td className="p-4">
@@ -724,7 +878,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
                   {filteredSporadicServices.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-slate-500 font-medium">
+                      <td colSpan={9} className="p-8 text-center text-slate-500 font-medium">
                         Nenhum serviço esporádico cadastrado no período selecionado.
                       </td>
                     </tr>
@@ -869,155 +1023,83 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         </div>
       )}
 
-      {/* Modal for Registering a New Sporadic Service */}
-      {isModalOpen && (
+      {/* Modal for Registering a New Sporadic Service (with PDF upload and due date) */}
+      <SporadicServiceModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        clients={clients}
+        onAddSporadicService={onAddSporadicService}
+        onToast={onToast}
+      />
+
+      {/* Hidden File Inputs for quick table upload */}
+      <input
+        ref={boletoPdfInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={handleBoletoPdfFileChange}
+      />
+      <input
+        ref={receiptInputRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={handleReceiptFileChange}
+      />
+
+      {/* Document / PDF Viewer Modal */}
+      {viewingAttachment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 p-4 bg-slate-950 shrink-0">
               <div className="flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-amber-400" />
-                <h3 className="text-base font-bold text-white">Novo Lançamento de Serviço Esporádico</h3>
+                <div className="p-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">{viewingAttachment.title}</h3>
+                  <p className="text-[11px] text-slate-400">
+                    {viewingAttachment.attachment.name} ({(viewingAttachment.attachment.size / 1024).toFixed(0)} KB)
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={viewingAttachment.attachment.dataUrl}
+                  download={viewingAttachment.attachment.name}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </a>
+                <button
+                  onClick={() => setViewingAttachment(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleCreateSporadicService} className="space-y-4 text-xs">
-              {/* Client Selection */}
-              <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Cliente Contratante *
-                </label>
-                <select
-                  value={newClientId}
-                  onChange={(e) => setNewClientId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  required
-                >
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.cpf})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Descrição do Serviço Avulso *
-                </label>
-                <input
-                  type="text"
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="Ex: Consultoria de Módulo, Suporte Presencial, etc."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium placeholder-slate-600 focus:ring-2 focus:ring-amber-500"
-                  required
+            {/* Viewer body */}
+            <div className="p-4 overflow-y-auto flex-1 bg-slate-950/50 flex items-center justify-center">
+              {viewingAttachment.attachment.dataUrl.startsWith('data:image/') ? (
+                <img
+                  src={viewingAttachment.attachment.dataUrl}
+                  alt={viewingAttachment.attachment.name}
+                  className="max-h-[75vh] max-w-full object-contain rounded-xl border border-slate-800 shadow-lg"
                 />
-              </div>
-
-              {/* Category & Amount */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Categoria
-                  </label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="Consultoria">Consultoria</option>
-                    <option value="Treinamento">Treinamento</option>
-                    <option value="Suporte Técnico">Suporte Técnico</option>
-                    <option value="Desenvolvimento">Desenvolvimento</option>
-                    <option value="Serviço Elétrico">Serviço Elétrico</option>
-                    <option value="Serviço Avulso">Serviço Avulso</option>
-                    <option value="Outros">Outros</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Valor do Serviço (R$) *
-                  </label>
-                  <input
-                    type="text"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    placeholder="1500,00"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Date & Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Data da Execução/Fatura *
-                  </label>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                    Status do Pagamento
-                  </label>
-                  <select
-                    value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value as 'realized' | 'pending')}
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="realized">Realizado (Pago / Faturado)</option>
-                    <option value="pending">Pendente (A Receber)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1">
-                  Observações Internas (Opcional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Anotações de faturamento..."
-                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium placeholder-slate-600 focus:ring-2 focus:ring-amber-500"
+              ) : (
+                <iframe
+                  src={viewingAttachment.attachment.dataUrl}
+                  title={viewingAttachment.attachment.name}
+                  className="w-full h-[75vh] rounded-xl border border-slate-800 bg-white"
                 />
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg shadow-amber-500/20 flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Salvar Lançamento</span>
-                </button>
-              </div>
-            </form>
+              )}
+            </div>
           </div>
         </div>
       )}

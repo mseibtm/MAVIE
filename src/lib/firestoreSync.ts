@@ -264,7 +264,29 @@ export async function saveAdminPasswordToFirestore(password: string) {
 
 export async function saveSporadicServiceToFirestore(service: SporadicService) {
   try {
-    await setDoc(doc(db, COLS.SPORADIC, service.id), removeUndefinedFields(service), { merge: true });
+    const docToSave: Record<string, any> = { ...service };
+
+    if (docToSave.pdfFile && docToSave.pdfFile.dataUrl && docToSave.pdfFile.dataUrl.length > 700000) {
+      docToSave.pdfFile = {
+        name: docToSave.pdfFile.name,
+        size: docToSave.pdfFile.size,
+        uploadedAt: docToSave.pdfFile.uploadedAt,
+        dataUrl: docToSave.pdfFile.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+
+    if (docToSave.paymentReceipt && docToSave.paymentReceipt.dataUrl && docToSave.paymentReceipt.dataUrl.length > 700000) {
+      docToSave.paymentReceipt = {
+        name: docToSave.paymentReceipt.name,
+        size: docToSave.paymentReceipt.size,
+        uploadedAt: docToSave.paymentReceipt.uploadedAt,
+        dataUrl: docToSave.paymentReceipt.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+
+    await setDoc(doc(db, COLS.SPORADIC, service.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving sporadic service to Firestore:', err);
   }
