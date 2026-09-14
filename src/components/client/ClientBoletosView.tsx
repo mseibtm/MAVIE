@@ -7,7 +7,7 @@ import { downloadBoletoFile, downloadDataUrl } from '../../utils/boletoPdfGenera
 interface ClientBoletosViewProps {
   client: Client;
   boletos: Boleto[];
-  onUploadReceipt?: (boletoId: string, receipt: PDFAttachment) => void;
+  onUploadReceipt?: (boletoId: string, receipt: PDFAttachment, markAsPaid?: boolean) => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -84,14 +84,16 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
         dataUrl: reader.result as string,
         uploadedAt: new Date().toISOString(),
       };
-      onUploadReceipt(uploadingBoletoId, receipt);
-      onToast('success', 'Comprovante Anexado!', `Comprovante (${file.name}) enviado com sucesso para conferência.`);
+      onUploadReceipt(uploadingBoletoId, receipt, true);
+      onToast('success', 'Comprovante Enviado e Boleto Quitado!', `Comprovante (${file.name}) salvo com sucesso e boleto liquidado como PAGO.`);
       
       // Update local state for modal if open
       if (selectedBoleto && selectedBoleto.id === uploadingBoletoId) {
         setSelectedBoleto({
           ...selectedBoleto,
           paymentReceipt: receipt,
+          status: 'paid',
+          paidAt: new Date().toISOString(),
         });
       }
       setUploadingBoletoId(null);

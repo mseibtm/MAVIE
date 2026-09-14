@@ -1,6 +1,6 @@
 import { Boleto, Client, AppNotification, UserSession } from '../types';
 import { getStoredNotifications, saveStoredNotifications, saveStoredBoletos } from './storage';
-import { saveNotificationToFirestore, deleteNotificationFromFirestore, saveBoletoToFirestore } from '../lib/firestoreSync';
+import { saveNotificationToFirestore, deleteNotificationFromFirestore, saveBoletoToFirestore, updateBoletoStatusInFirestore } from '../lib/firestoreSync';
 
 /**
  * Request permission for Browser Push Notifications
@@ -299,7 +299,16 @@ export function syncBoletoStatuses(boletos: Boleto[]): { updatedBoletos: Boleto[
 
   const changedBoletos: Boleto[] = [];
   const updatedBoletos = boletos.map((b) => {
-    if (b.status === 'paid') return b;
+    // CRITICAL: Any boleto marked as paid or with paidAt is strictly settled/liquidated.
+    // It must NEVER be recalculated as overdue or pending!
+    if (b.status === 'paid' || Boolean(b.paidAt)) {
+      if (b.status !== 'paid') {
+        const updated = { ...b, status: 'paid' as const, paidAt: b.paidAt || new Date().toISOString() };
+        changedBoletos.push(updated);
+        return updated;
+      }
+      return b;
+    }
 
     if (b.dueDate < todayStr && b.status !== 'overdue') {
       const updated = { ...b, status: 'overdue' as const };
@@ -326,7 +335,9 @@ export function syncAndSaveBoletoStatuses(boletos: Boleto[]): Boleto[] {
   const { updatedBoletos, changedBoletos } = syncBoletoStatuses(boletos);
   if (changedBoletos.length > 0) {
     saveStoredBoletos(updatedBoletos);
-    changedBoletos.forEach((b) => saveBoletoToFirestore(b));
+    changedBoletos.forEach((b) => {
+      updateBoletoStatusInFirestore(b.id, b.status, b.paidAt);
+    });
   }
   return updatedBoletos;
 }

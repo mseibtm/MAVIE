@@ -5,10 +5,11 @@ import {
   getDocs,
   onSnapshot,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus } from '../types';
 import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 // Firestore collections
@@ -172,9 +173,48 @@ export async function saveBoletoToFirestore(boleto: Boleto) {
       };
     }
 
-    await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave));
+    await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving boleto to Firestore:', err);
+  }
+}
+
+/**
+ * Direct, lightweight status update to Firestore with merge: true
+ * Guarantees that status and paidAt updates succeed immediately without payload overhead
+ */
+export async function updateBoletoStatusInFirestore(boletoId: string, status: BoletoStatus, paidAt?: string) {
+  try {
+    const payload: Record<string, any> = {
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+    if (status === 'paid') {
+      payload.paidAt = paidAt || new Date().toISOString();
+    } else {
+      payload.paidAt = deleteField();
+    }
+    await setDoc(doc(db, COLS.BOLETOS, boletoId), payload, { merge: true });
+  } catch (err) {
+    console.error('Error updating boleto status in Firestore:', err);
+  }
+}
+
+/**
+ * Remove receipt from a boleto in Firestore
+ */
+export async function removeBoletoReceiptFromFirestore(boletoId: string) {
+  try {
+    await setDoc(
+      doc(db, COLS.BOLETOS, boletoId),
+      {
+        paymentReceipt: deleteField(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error('Error removing boleto receipt from Firestore:', err);
   }
 }
 

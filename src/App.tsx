@@ -31,6 +31,8 @@ import {
   saveClientToFirestore,
   deleteClientFromFirestore,
   saveBoletoToFirestore,
+  updateBoletoStatusInFirestore,
+  removeBoletoReceiptFromFirestore,
   deleteBoletoFromFirestore,
   saveNFeToFirestore,
   deleteNFeFromFirestore,
@@ -207,16 +209,38 @@ export default function App() {
           const mergedRemote = cleanedRemote.map((rb) => {
             const lb = localMap.get(rb.id);
             if (lb) {
+              // CRITICAL: Protect PAID status from being reverted by stale snapshots or date checks
+              const isPaid = rb.status === 'paid' || lb.status === 'paid' || Boolean(rb.paidAt) || Boolean(lb.paidAt);
+              const resolvedStatus: BoletoStatus = isPaid ? 'paid' : rb.status;
+              const resolvedPaidAt = isPaid ? (rb.paidAt || lb.paidAt || new Date().toISOString()) : undefined;
+
+              // If it is paid locally but remote doesn't have status: 'paid', sync remote immediately
+              if (isPaid && rb.status !== 'paid') {
+                updateBoletoStatusInFirestore(rb.id, 'paid', resolvedPaidAt);
+              }
+
+              const resolvedPdf = (lb.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                ? lb.pdfFile
+                : (rb.pdfFile || lb.pdfFile);
+
+              const resolvedReceipt = (lb.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                ? lb.paymentReceipt
+                : (rb.paymentReceipt || lb.paymentReceipt);
+
               return {
                 ...rb,
-                pdfFile: (lb.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
-                  ? lb.pdfFile
-                  : rb.pdfFile,
-                paymentReceipt: (lb.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
-                  ? lb.paymentReceipt
-                  : rb.paymentReceipt,
+                status: resolvedStatus,
+                paidAt: resolvedPaidAt,
+                pdfFile: resolvedPdf,
+                paymentReceipt: resolvedReceipt,
               };
             }
+
+            if (rb.paidAt && rb.status !== 'paid') {
+              updateBoletoStatusInFirestore(rb.id, 'paid', rb.paidAt);
+              return { ...rb, status: 'paid' as const };
+            }
+
             return rb;
           });
 
@@ -371,6 +395,7 @@ export default function App() {
           const item: SporadicService = {
             ...s,
             paymentReceipt: receipt,
+            status: 'realized',
           };
           updatedItem = item;
           return item;
@@ -687,27 +712,20 @@ export default function App() {
   };
 
   const handleUpdateBoletoStatus = (boletoId: string, status: BoletoStatus) => {
-    // Guarantee immediate persistence with current storage snapshot
-    const currentList = getStoredBoletos();
-    const existing = currentList.find((b) => b.id === boletoId);
-    let updatedBoleto: Boleto | undefined;
+    const paidTimestamp = status === 'paid' ? new Date().toISOString() : undefined;
 
-    if (existing) {
-      updatedBoleto = {
-        ...existing,
-        status,
-        paidAt: status === 'paid' ? (existing.paidAt || new Date().toISOString()) : undefined,
-      };
-      saveBoletoToFirestore(updatedBoleto);
-    }
+    // 1. Immediately push fast, lightweight update to Firestore
+    updateBoletoStatusInFirestore(boletoId, status, paidTimestamp);
 
+    // 2. Update local state and localStorage
     setBoletos((prev) => {
+      let updatedBoleto: Boleto | undefined;
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
           const item: Boleto = {
             ...b,
             status,
-            paidAt: status === 'paid' ? (b.paidAt || new Date().toISOString()) : undefined,
+            paidAt: status === 'paid' ? (b.paidAt || paidTimestamp) : undefined,
           };
           updatedBoleto = item;
           return item;
@@ -725,31 +743,14 @@ export default function App() {
   const handleUpdateBoletoDueDate = (boletoId: string, newDueDate: string) => {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
-    const currentList = getStoredBoletos();
-    const existing = currentList.find((b) => b.id === boletoId);
-    let updatedBoleto: Boleto | undefined;
-
-    if (existing) {
-      let newStatus = existing.status;
-      if (newStatus !== 'paid') {
-        newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
-      }
-      updatedBoleto = {
-        ...existing,
-        dueDate: newDueDate,
-        status: newStatus,
-      };
-      saveBoletoToFirestore(updatedBoleto);
-    }
 
     setBoletos((prev) => {
+      let updatedBoleto: Boleto | undefined;
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
-          let newStatus = b.status;
-          if (newStatus !== 'paid') {
-            newStatus = newDueDate < todayStr ? 'overdue' : 'pending';
-          }
+          // CRITICAL: If boleto was already paid, status MUST STAY PAID!
+          const isPaid = b.status === 'paid' || Boolean(b.paidAt);
+          const newStatus: BoletoStatus = isPaid ? 'paid' : (newDueDate < todayStr ? 'overdue' : 'pending');
           const item: Boleto = {
             ...b,
             dueDate: newDueDate,
@@ -774,29 +775,24 @@ export default function App() {
     addToast('success', 'Vencimento Atualizado', `Boleto #${boletoId} alterado para ${formattedDate}.`);
   };
 
-  const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment, markAsPaid: boolean = false) => {
-    const currentList = getStoredBoletos();
-    const existing = currentList.find((b) => b.id === boletoId);
-    let updatedBoleto: Boleto | undefined;
+  const handleUploadBoletoReceipt = (boletoId: string, receipt: PDFAttachment, markAsPaid: boolean = true) => {
+    const paidTimestamp = new Date().toISOString();
+    const shouldMarkPaid = markAsPaid !== false;
 
-    if (existing) {
-      updatedBoleto = {
-        ...existing,
-        paymentReceipt: receipt,
-        status: markAsPaid ? 'paid' : existing.status,
-        paidAt: markAsPaid ? (existing.paidAt || new Date().toISOString()) : existing.paidAt,
-      };
-      saveBoletoToFirestore(updatedBoleto);
+    // Immediately update Firestore with status 'paid' when receipt is uploaded
+    if (shouldMarkPaid) {
+      updateBoletoStatusInFirestore(boletoId, 'paid', paidTimestamp);
     }
 
     setBoletos((prev) => {
+      let updatedBoleto: Boleto | undefined;
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
           const item: Boleto = {
             ...b,
             paymentReceipt: receipt,
-            status: markAsPaid ? 'paid' : b.status,
-            paidAt: markAsPaid ? (b.paidAt || new Date().toISOString()) : b.paidAt,
+            status: shouldMarkPaid ? 'paid' : b.status,
+            paidAt: shouldMarkPaid ? (b.paidAt || paidTimestamp) : b.paidAt,
           };
           updatedBoleto = item;
           return item;
@@ -811,13 +807,14 @@ export default function App() {
     });
 
     // Notify admin of payment receipt upload (strictly isolated to admin)
-    const targetBoleto = existing || boletos.find((b) => b.id === boletoId);
+    const currentList = getStoredBoletos();
+    const targetBoleto = currentList.find((b) => b.id === boletoId) || boletos.find((b) => b.id === boletoId);
     if (targetBoleto) {
       const targetClient = clients.find((c) => c.id === targetBoleto.clientId);
       const notif: AppNotification = {
         id: `notif-rec-bol-${Date.now()}`,
-        title: 'Comprovante de Boleto Enviado',
-        body: `Comprovante de pagamento anexado ao boleto #${boletoId} (${targetClient?.name || 'Cliente'}).`,
+        title: 'Comprovante de Pagamento Anexado',
+        body: `Comprovante de pagamento anexado ao boleto #${boletoId} (${targetClient?.name || 'Cliente'}). Título liquidado com sucesso.`,
         type: 'system',
         boletoId: boletoId,
         clientId: targetBoleto.clientId,
@@ -831,17 +828,11 @@ export default function App() {
   };
 
   const handleRemoveBoletoReceipt = (boletoId: string) => {
-    const currentList = getStoredBoletos();
-    const existing = currentList.find((b) => b.id === boletoId);
-    let updatedBoleto: Boleto | undefined;
-
-    if (existing) {
-      const { paymentReceipt, ...rest } = existing;
-      updatedBoleto = rest as Boleto;
-      saveBoletoToFirestore(updatedBoleto);
-    }
+    // Delete receipt field from Firestore
+    removeBoletoReceiptFromFirestore(boletoId);
 
     setBoletos((prev) => {
+      let updatedBoleto: Boleto | undefined;
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
           const { paymentReceipt, ...rest } = b;
@@ -852,9 +843,6 @@ export default function App() {
         return b;
       });
       saveStoredBoletos(updated);
-      if (updatedBoleto) {
-        saveBoletoToFirestore(updatedBoleto);
-      }
       return updated;
     });
 

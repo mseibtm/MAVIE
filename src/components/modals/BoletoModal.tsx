@@ -56,7 +56,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
         dataUrl: reader.result as string,
         uploadedAt: new Date().toISOString(),
       };
-      onUploadReceipt(boleto.id, receiptAttachment, isAdmin);
+      onUploadReceipt(boleto.id, receiptAttachment, true);
     };
     reader.readAsDataURL(file);
   };
@@ -94,6 +94,20 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             <span className="text-sm font-medium text-slate-300">
               Doc #{boleto.id}
             </span>
+            {boleto.status === 'paid' ? (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>PAGO / LIQUIDADO</span>
+              </span>
+            ) : boleto.status === 'overdue' ? (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                EM ATRASO
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                A VENCER
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
