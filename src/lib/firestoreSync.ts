@@ -9,7 +9,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment } from '../types';
 import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 // Firestore collections
@@ -176,6 +176,30 @@ export async function saveBoletoToFirestore(boleto: Boleto) {
     await setDoc(doc(db, COLS.BOLETOS, boleto.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving boleto to Firestore:', err);
+  }
+}
+
+/**
+ * Direct, dedicated receipt save to Firestore with merge: true
+ * Guarantees that receipt and paid status are atomically persisted without resending large PDF files
+ */
+export async function saveBoletoReceiptToFirestore(
+  boletoId: string,
+  receipt: PDFAttachment,
+  markAsPaid: boolean = true
+) {
+  try {
+    const payload: Record<string, any> = {
+      paymentReceipt: receipt,
+      updatedAt: new Date().toISOString(),
+    };
+    if (markAsPaid) {
+      payload.status = 'paid';
+      payload.paidAt = receipt.uploadedAt || new Date().toISOString();
+    }
+    await setDoc(doc(db, COLS.BOLETOS, boletoId), removeUndefinedFields(payload), { merge: true });
+  } catch (err) {
+    console.error('Error saving boleto receipt to Firestore:', err);
   }
 }
 

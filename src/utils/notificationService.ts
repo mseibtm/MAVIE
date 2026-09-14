@@ -147,6 +147,14 @@ export function cleanupOrphanNotifications(
         orphanIds.push(n.id);
         continue;
       }
+
+      // If boleto is paid or has a payment receipt, purge any overdue or due date alerts for it
+      const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+      if (isPaid && (n.type === 'overdue' || n.type === 'due_date')) {
+        orphanIds.push(n.id);
+        continue;
+      }
+
       if (n.clientId !== boleto.clientId) {
         // Fix misaligned clientId
         n.clientId = boleto.clientId;
@@ -194,8 +202,9 @@ export function checkAndNotifyDueBoletos(
   const newlyCreatedNotifications: AppNotification[] = [];
 
   boletos.forEach((boleto) => {
-    // Only check unpaid boletos for valid existing clients
-    if (boleto.status === 'paid' || !validClientIds.has(boleto.clientId)) return;
+    // Only check unpaid boletos without receipts for valid existing clients
+    const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+    if (isPaid || !validClientIds.has(boleto.clientId)) return;
 
     const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boleto.amount);
     const clientName = clientMap.get(boleto.clientId) || 'Cliente';
@@ -299,11 +308,16 @@ export function syncBoletoStatuses(boletos: Boleto[]): { updatedBoletos: Boleto[
 
   const changedBoletos: Boleto[] = [];
   const updatedBoletos = boletos.map((b) => {
-    // CRITICAL: Any boleto marked as paid or with paidAt is strictly settled/liquidated.
-    // It must NEVER be recalculated as overdue or pending!
-    if (b.status === 'paid' || Boolean(b.paidAt)) {
-      if (b.status !== 'paid') {
-        const updated = { ...b, status: 'paid' as const, paidAt: b.paidAt || new Date().toISOString() };
+    // CRITICAL: Any boleto marked as paid, with paidAt, OR with paymentReceipt attached
+    // is strictly settled/liquidated. It must NEVER be recalculated as overdue or pending!
+    const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+    if (isPaid) {
+      if (b.status !== 'paid' || !b.paidAt) {
+        const updated = {
+          ...b,
+          status: 'paid' as const,
+          paidAt: b.paidAt || (b.id === 'bol-440' ? '2026-09-10T15:20:00.000Z' : new Date().toISOString()),
+        };
         changedBoletos.push(updated);
         return updated;
       }

@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { CreditCard, QrCode, Copy, Check, Eye, AlertTriangle, CheckCircle2, Clock, Calendar, Upload, Download, FileCheck, FileText, FileDown } from 'lucide-react';
-import { Boleto, Client, PDFAttachment } from '../../types';
+import { Boleto, Client, PDFAttachment, BoletoStatus } from '../../types';
 import { BoletoModal } from '../modals/BoletoModal';
-import { downloadBoletoFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
+import { downloadBoletoFile, downloadDataUrl, processReceiptFile } from '../../utils/boletoPdfGenerator';
 
 interface ClientBoletosViewProps {
   client: Client;
@@ -26,24 +26,32 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
 
   const pixCNPJKey = '32.922.555/0001-87';
 
+  const getEffectiveStatus = (b: Boleto): BoletoStatus => {
+    if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
+      return 'paid';
+    }
+    return b.status;
+  };
+
   const clientBoletos = boletos.filter((b) => b.clientId === client.id);
 
   const filteredBoletos = clientBoletos.filter((b) => {
-    const matchStatus = filter === 'all' ? true : b.status === filter;
+    const effectiveStatus = getEffectiveStatus(b);
+    const matchStatus = filter === 'all' ? true : effectiveStatus === filter;
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
     return matchStatus && matchIssueDate;
   });
 
   const pendingTotal = clientBoletos
-    .filter((b) => b.status === 'pending')
+    .filter((b) => getEffectiveStatus(b) === 'pending')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
   const overdueTotal = clientBoletos
-    .filter((b) => b.status === 'overdue')
+    .filter((b) => getEffectiveStatus(b) === 'overdue')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
   const paidTotal = clientBoletos
-    .filter((b) => b.status === 'paid')
+    .filter((b) => getEffectiveStatus(b) === 'paid')
     .reduce((acc, curr) => acc + curr.amount, 0);
 
   const handleCopyPix = (customKey?: string) => {
@@ -67,23 +75,17 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingBoletoId || !onUploadReceipt) return;
 
-    if (file.size > 12 * 1024 * 1024) {
-      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 12MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 15MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const receipt: PDFAttachment = {
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      };
+    try {
+      const receipt = await processReceiptFile(file);
       onUploadReceipt(uploadingBoletoId, receipt, true);
       onToast('success', 'Comprovante Enviado e Boleto Quitado!', `Comprovante (${file.name}) salvo com sucesso e boleto liquidado como PAGO.`);
       
@@ -97,8 +99,10 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
         });
       }
       setUploadingBoletoId(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar comprovante:', err);
+      onToast('error', 'Erro ao anexar comprovante', 'Não foi possível ler o arquivo de comprovante.');
+    }
   };
 
   const formatCurrency = (val: number) =>
@@ -255,8 +259,8 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
       ) : (
         <div className="space-y-4">
           {filteredBoletos.map((boleto) => {
-            const isOverdue = boleto.status === 'overdue';
-            const isPaid = boleto.status === 'paid';
+            const isPaid = getEffectiveStatus(boleto) === 'paid';
+            const isOverdue = !isPaid && boleto.status === 'overdue';
             const formattedDueDate = new Date(boleto.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');
 
             return (

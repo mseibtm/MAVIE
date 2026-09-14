@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Printer, Copy, Check, QrCode, FileText, Download, Upload, CheckCircle2, ExternalLink, Calendar, Trash2, Edit3, Image as ImageIcon, Barcode, ShieldCheck } from 'lucide-react';
 import { Boleto, Client, PDFAttachment } from '../../types';
 import { formatCPF, cleanCPF } from '../../utils/cpf';
-import { downloadBoletoFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
+import { downloadBoletoFile, downloadDataUrl, processReceiptFile } from '../../utils/boletoPdfGenerator';
 
 interface BoletoModalProps {
   boleto: Boleto;
@@ -31,6 +31,10 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
   const [tempDueDate, setTempDueDate] = useState(boleto.dueDate);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setTempDueDate(boleto.dueDate);
+  }, [boleto.dueDate]);
+
   const pixCNPJKey = '35.798.372/0001-90';
 
   const handleCopyPix = () => {
@@ -39,26 +43,21 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
     setTimeout(() => setCopiedPix(false), 2000);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onUploadReceipt) return;
 
-    if (file.size > 12 * 1024 * 1024) {
-      alert('O arquivo de comprovante deve ter no máximo 12MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      alert('O arquivo de comprovante deve ter no máximo 15MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const receiptAttachment: PDFAttachment = {
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      };
+    try {
+      const receiptAttachment = await processReceiptFile(file);
       onUploadReceipt(boleto.id, receiptAttachment, true);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar comprovante:', err);
+    }
   };
 
   const handleSaveDueDate = () => {
@@ -77,6 +76,11 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
     currency: 'BRL',
   }).format(boleto.amount);
 
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+  const isOverdue = !isPaid && (boleto.status === 'overdue' || boleto.dueDate < todayStr);
+
   const formattedDueDate = new Date(boleto.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');
   const isCNPJ = client ? cleanCPF(client.cpf).length > 11 : false;
   const docLabel = isCNPJ ? 'CNPJ' : 'CPF';
@@ -94,12 +98,12 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
             <span className="text-sm font-medium text-slate-300">
               Doc #{boleto.id}
             </span>
-            {boleto.status === 'paid' ? (
+            {isPaid ? (
               <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>PAGO / LIQUIDADO</span>
               </span>
-            ) : boleto.status === 'overdue' ? (
+            ) : isOverdue ? (
               <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
                 EM ATRASO
               </span>

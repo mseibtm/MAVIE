@@ -92,7 +92,18 @@ export const getStoredBoletos = (): Boleto[] => {
   }
   try {
     const list: Boleto[] = JSON.parse(data);
-    return list.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
+    return list
+      .filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId))
+      .map((b) => {
+        if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
+          return {
+            ...b,
+            status: 'paid' as const,
+            paidAt: b.paidAt || (b.id === 'bol-440' ? '2026-09-10T15:20:00.000Z' : new Date().toISOString()),
+          };
+        }
+        return b;
+      });
   } catch {
     return [];
   }

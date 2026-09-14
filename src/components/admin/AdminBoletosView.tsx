@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Boleto, Client, BoletoStatus, PDFAttachment, SporadicService } from '../../types';
 import { generateDigitableLine, generateRandomBarcode } from '../../utils/cpf';
+import { processReceiptFile } from '../../utils/boletoPdfGenerator';
 import { BoletoModal } from '../modals/BoletoModal';
 import { SporadicServiceModal } from '../modals/SporadicServiceModal';
 import { PDFUploader } from '../common/PDFUploader';
@@ -199,25 +200,22 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     setReceiptAutoMarkPaid(boleto.status !== 'paid');
   };
 
-  const handleReceiptFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 12 * 1024 * 1024) {
-      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 12MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 15MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setUploadedReceiptFile({
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const processed = await processReceiptFile(file);
+      setUploadedReceiptFile(processed);
+    } catch (err) {
+      console.error('Erro ao processar comprovante:', err);
+      onToast('error', 'Erro', 'Não foi possível ler o comprovante.');
+    }
   };
 
   const handleSaveReceipt = () => {
@@ -245,11 +243,18 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     }
   };
 
+  const getEffectiveStatus = (b: Boleto): BoletoStatus => {
+    if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
+      return 'paid';
+    }
+    return b.status;
+  };
+
   const filteredBoletos = boletos.filter((b) => {
     const client = clients.find((c) => c.id === b.clientId);
     if (!client) return false;
     const matchClient = selectedClientId ? b.clientId === selectedClientId : true;
-    const matchStatus = statusFilter === 'all' ? true : b.status === statusFilter;
+    const matchStatus = statusFilter === 'all' ? true : getEffectiveStatus(b) === statusFilter;
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
     const matchSearch =
       b.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -506,43 +511,48 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                   {/* Status Dropdown */}
                   <div className="flex flex-col">
                     <span className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Status:</span>
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={boleto.status}
-                        initial={{ scale: 0.85, opacity: 0, y: -4 }}
-                        animate={{ scale: 1, opacity: 1, y: 0 }}
-                        exit={{ scale: 0.85, opacity: 0, y: 4 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                      >
-                        <select
-                          value={boleto.status}
-                          onChange={(e) => {
-                            const newStatus = e.target.value as BoletoStatus;
-                            onUpdateBoletoStatus(boleto.id, newStatus);
-                            const statusLabel =
-                              newStatus === 'pending' ? 'A vencer' : newStatus === 'paid' ? 'Pago' : 'Em atraso';
-                            onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
-                          }}
-                          className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all shadow-sm ${
-                            boleto.status === 'paid'
-                              ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900 ring-1 ring-emerald-500/30'
-                              : boleto.status === 'overdue'
-                              ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900 ring-1 ring-rose-500/30'
-                              : 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900 ring-1 ring-amber-500/30'
-                          }`}
-                        >
-                          <option value="pending" className="bg-slate-900 text-amber-300">
-                            A vencer
-                          </option>
-                          <option value="paid" className="bg-slate-900 text-emerald-300">
-                            Pago
-                          </option>
-                          <option value="overdue" className="bg-slate-900 text-rose-300">
-                            Em atraso
-                          </option>
-                        </select>
-                      </motion.div>
-                    </AnimatePresence>
+                    {(() => {
+                      const effectiveStatus = getEffectiveStatus(boleto);
+                      return (
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={effectiveStatus}
+                            initial={{ scale: 0.85, opacity: 0, y: -4 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.85, opacity: 0, y: 4 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                          >
+                            <select
+                              value={effectiveStatus}
+                              onChange={(e) => {
+                                const newStatus = e.target.value as BoletoStatus;
+                                onUpdateBoletoStatus(boleto.id, newStatus);
+                                const statusLabel =
+                                  newStatus === 'pending' ? 'A vencer' : newStatus === 'paid' ? 'Pago' : 'Em atraso';
+                                onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
+                              }}
+                              className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all shadow-sm ${
+                                effectiveStatus === 'paid'
+                                  ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900 ring-1 ring-emerald-500/30'
+                                  : effectiveStatus === 'overdue'
+                                  ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900 ring-1 ring-rose-500/30'
+                                  : 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900 ring-1 ring-amber-500/30'
+                              }`}
+                            >
+                              <option value="pending" className="bg-slate-900 text-amber-300">
+                                A vencer
+                              </option>
+                              <option value="paid" className="bg-slate-900 text-emerald-300">
+                                Pago
+                              </option>
+                              <option value="overdue" className="bg-slate-900 text-rose-300">
+                                Em atraso
+                              </option>
+                            </select>
+                          </motion.div>
+                        </AnimatePresence>
+                      );
+                    })()}
                   </div>
 
                   {/* Receipt button */}

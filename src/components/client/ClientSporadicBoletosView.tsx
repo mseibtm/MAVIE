@@ -20,7 +20,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { Client, SporadicService, PDFAttachment } from '../../types';
-import { downloadSporadicServicePDF, downloadDataUrl } from '../../utils/boletoPdfGenerator';
+import { downloadSporadicServicePDF, downloadDataUrl, processReceiptFile } from '../../utils/boletoPdfGenerator';
 
 interface ClientSporadicBoletosViewProps {
   client: Client;
@@ -73,23 +73,17 @@ export const ClientSporadicBoletosView: React.FC<ClientSporadicBoletosViewProps>
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingServiceId || !onUploadReceipt) return;
 
-    if (file.size > 12 * 1024 * 1024) {
-      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 12MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      onToast('error', 'Arquivo muito grande', 'O comprovante deve ter no máximo 15MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const receipt: PDFAttachment = {
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      };
+    try {
+      const receipt = await processReceiptFile(file);
       onUploadReceipt(uploadingServiceId, receipt);
       onToast('success', 'Comprovante Enviado!', `Comprovante (${file.name}) salvo com sucesso para conferência.`);
 
@@ -100,8 +94,10 @@ export const ClientSporadicBoletosView: React.FC<ClientSporadicBoletosViewProps>
         });
       }
       setUploadingServiceId(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar comprovante:', err);
+      onToast('error', 'Erro ao anexar comprovante', 'Não foi possível processar o arquivo de comprovante.');
+    }
   };
 
   const formatFileSize = (bytes: number) => {

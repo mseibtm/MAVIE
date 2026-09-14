@@ -55,6 +55,90 @@ export function downloadDataUrl(dataUrl: string, filename: string): boolean {
 }
 
 /**
+ * Optimizes and prepares any receipt image or PDF file before saving.
+ * Image receipts from mobile phones (often 3MB-10MB) are automatically resized to max 1280px
+ * and compressed to JPEG (~100KB-200KB), completely avoiding Firestore document size limits.
+ */
+export async function processReceiptFile(file: File): Promise<{ name: string; size: number; dataUrl: string; uploadedAt: string }> {
+  if (file.type.startsWith('image/')) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawResult = e.target?.result as string;
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1280;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve({
+              name: file.name.replace(/\.[^/.]+$/, '') + '.jpg',
+              size: Math.round((dataUrl.length * 3) / 4),
+              dataUrl,
+              uploadedAt: new Date().toISOString(),
+            });
+            return;
+          }
+          resolve({
+            name: file.name,
+            size: file.size,
+            dataUrl: rawResult,
+            uploadedAt: new Date().toISOString(),
+          });
+        };
+        img.onerror = () => {
+          resolve({
+            name: file.name,
+            size: file.size,
+            dataUrl: rawResult,
+            uploadedAt: new Date().toISOString(),
+          });
+        };
+        img.src = rawResult;
+      };
+      reader.onerror = () => {
+        resolve({
+          name: file.name,
+          size: file.size,
+          dataUrl: '',
+          uploadedAt: new Date().toISOString(),
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Standard PDF or other format
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        size: file.size,
+        dataUrl: reader.result as string,
+        uploadedAt: new Date().toISOString(),
+      });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Draws a realistic Brazilian standard barcode on a jsPDF canvas
  */
 function drawBarcode(doc: jsPDF, x: number, y: number, height: number, barcodeNumber: string) {
