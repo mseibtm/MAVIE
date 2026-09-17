@@ -7,6 +7,7 @@ import {
   deleteDoc,
   writeBatch,
   deleteField,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment } from '../types';
@@ -353,6 +354,37 @@ export async function saveSporadicServiceToFirestore(service: SporadicService) {
     await setDoc(doc(db, COLS.SPORADIC, service.id), removeUndefinedFields(docToSave), { merge: true });
   } catch (err) {
     console.error('Error saving sporadic service to Firestore:', err);
+  }
+}
+
+export async function saveSporadicReceiptToFirestore(serviceId: string, receipt: PDFAttachment, markAsRealized: boolean = true) {
+  try {
+    const docReceipt: Record<string, any> = { ...receipt };
+    if (docReceipt.dataUrl && docReceipt.dataUrl.length > 700000) {
+      docReceipt.dataUrl = docReceipt.dataUrl.substring(0, 1000) + '...[large_pdf_file_saved_locally]';
+      docReceipt.isLargeFile = true;
+    }
+    const payload: Record<string, any> = {
+      paymentReceipt: docReceipt,
+      updatedAt: new Date().toISOString(),
+    };
+    if (markAsRealized) {
+      payload.status = 'realized';
+    }
+    await setDoc(doc(db, COLS.SPORADIC, serviceId), removeUndefinedFields(payload), { merge: true });
+  } catch (err) {
+    console.error('Error saving sporadic receipt to Firestore:', err);
+  }
+}
+
+export async function removeSporadicReceiptFromFirestore(serviceId: string) {
+  try {
+    await updateDoc(doc(db, COLS.SPORADIC, serviceId), {
+      paymentReceipt: deleteField(),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Error removing sporadic receipt from Firestore:', err);
   }
 }
 

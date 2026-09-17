@@ -20,10 +20,13 @@ import {
   Receipt,
   FileSpreadsheet,
   FileText,
+  FileCheck,
   Eye,
   Download,
   Upload,
   ExternalLink,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import {
   BarChart,
@@ -36,6 +39,7 @@ import {
   Legend,
 } from 'recharts';
 import { Client, Boleto, SporadicService, PDFAttachment } from '../../types';
+import { processReceiptFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
 import { SporadicServiceModal } from '../modals/SporadicServiceModal';
 
 interface AdminFinancialViewProps {
@@ -77,6 +81,11 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
   // Viewing attachment modal (Boleto PDF or Payment receipt)
   const [viewingAttachment, setViewingAttachment] = useState<{ title: string; attachment: PDFAttachment } | null>(null);
+  const [receiptModalService, setReceiptModalService] = useState<SporadicService | null>(null);
+  const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
+  const [isReplacingReceipt, setIsReplacingReceipt] = useState(false);
+  const [receiptAutoMarkPaid, setReceiptAutoMarkPaid] = useState(true);
+
   const [uploadingPdfForServiceId, setUploadingPdfForServiceId] = useState<string | null>(null);
   const [uploadingReceiptForServiceId, setUploadingReceiptForServiceId] = useState<string | null>(null);
   const boletoPdfInputRef = React.useRef<HTMLInputElement>(null);
@@ -90,55 +99,71 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
     }
   };
 
-  const handleBoletoPdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBoletoPdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !uploadingPdfForServiceId || !onUploadSporadicBoletoPdf) return;
     if (file.size > 12 * 1024 * 1024) {
       onToast('error', 'Arquivo Muito Grande', 'O PDF do boleto deve ter no máximo 12MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const attachment: PDFAttachment = {
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      };
+    try {
+      const attachment = await processReceiptFile(file);
       onUploadSporadicBoletoPdf(uploadingPdfForServiceId, attachment);
+      onToast('success', 'Boleto em PDF Anexado', `Arquivo (${file.name}) salvo com sucesso.`);
       setUploadingPdfForServiceId(null);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Erro ao processar PDF:', err);
+      onToast('error', 'Erro ao anexar PDF', 'Não foi possível processar o arquivo.');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
   };
 
   const triggerUploadReceipt = (serviceId: string) => {
-    setUploadingReceiptForServiceId(serviceId);
-    if (receiptInputRef.current) {
-      receiptInputRef.current.value = '';
-      receiptInputRef.current.click();
+    const s = sporadicServices.find((item) => item.id === serviceId);
+    if (s) {
+      setReceiptModalService(s);
+      setIsReplacingReceipt(!s.paymentReceipt);
+    } else {
+      setUploadingReceiptForServiceId(serviceId);
+      if (receiptInputRef.current) {
+        receiptInputRef.current.value = '';
+        receiptInputRef.current.click();
+      }
     }
   };
 
-  const handleReceiptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !uploadingReceiptForServiceId || !onUploadSporadicReceipt) return;
-    if (file.size > 12 * 1024 * 1024) {
-      onToast('error', 'Arquivo Muito Grande', 'O comprovante deve ter no máximo 12MB.');
+    const targetServiceId = receiptModalService?.id || uploadingReceiptForServiceId;
+    if (!file || !targetServiceId || !onUploadSporadicReceipt) return;
+
+    if (file.size > 15 * 1024 * 1024) {
+      onToast('error', 'Arquivo Muito Grande', 'O comprovante deve ter no máximo 15MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const attachment: PDFAttachment = {
-        name: file.name,
-        size: file.size,
-        dataUrl: reader.result as string,
-        uploadedAt: new Date().toISOString(),
-      };
-      onUploadSporadicReceipt(uploadingReceiptForServiceId, attachment);
+
+    try {
+      setIsProcessingReceipt(true);
+      onToast('info', 'Processando comprovante...', 'Otimizando e comprimindo arquivo para envio seguro.');
+      const attachment = await processReceiptFile(file);
+      onUploadSporadicReceipt(targetServiceId, attachment);
+
+      if (receiptAutoMarkPaid) {
+        onUpdateSporadicStatus(targetServiceId, 'realized');
+      }
+
       onToast('success', 'Comprovante Anexado', `Comprovante (${file.name}) salvo com sucesso.`);
       setUploadingReceiptForServiceId(null);
-    };
-    reader.readAsDataURL(file);
+      setReceiptModalService(null);
+      setIsReplacingReceipt(false);
+    } catch (err) {
+      console.error('Erro ao processar comprovante:', err);
+      onToast('error', 'Erro ao anexar comprovante', 'Não foi possível processar o arquivo de comprovante.');
+    } finally {
+      setIsProcessingReceipt(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
   // Format BRL
@@ -786,26 +811,23 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                           {s.paymentReceipt ? (
                             <div className="flex items-center gap-1.5">
                               <button
-                                onClick={() =>
-                                  setViewingAttachment({
-                                    title: `Comprovante - ${s.description}`,
-                                    attachment: s.paymentReceipt!,
-                                  })
-                                }
-                                className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
-                                title="Visualizar comprovante de pagamento"
+                                onClick={() => {
+                                  setReceiptModalService(s);
+                                  setIsReplacingReceipt(false);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Gerenciar / Visualizar comprovante"
                               >
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                <span>Ver Anexo</span>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <span className="truncate max-w-[90px]">{s.paymentReceipt.name || 'Comprovante'}</span>
                               </button>
-                              <a
-                                href={s.paymentReceipt.dataUrl}
-                                download={s.paymentReceipt.name}
-                                className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                              <button
+                                onClick={() => downloadDataUrl(s.paymentReceipt!.dataUrl, s.paymentReceipt!.name)}
+                                className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
                                 title={`Baixar ${s.paymentReceipt.name}`}
                               >
                                 <Download className="w-3.5 h-3.5" />
-                              </a>
+                              </button>
                               {onRemoveSporadicReceipt && (
                                 <button
                                   onClick={() => {
@@ -813,7 +835,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                                       onRemoveSporadicReceipt(s.id);
                                     }
                                   }}
-                                  className="p-1 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
+                                  className="p-1 text-slate-500 hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
                                   title="Remover Comprovante"
                                 >
                                   <X className="w-3.5 h-3.5" />
@@ -822,11 +844,14 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                             </div>
                           ) : (
                             <button
-                              onClick={() => triggerUploadReceipt(s.id)}
-                              className="px-2 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-dashed border-slate-700 rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors"
+                              onClick={() => {
+                                setReceiptModalService(s);
+                                setIsReplacingReceipt(true);
+                              }}
+                              className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-dashed border-slate-700 rounded-lg text-[10px] font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
                               title="Anexar comprovante de pagamento recebido"
                             >
-                              <Upload className="w-3 h-3 text-slate-400" />
+                              <Upload className="w-3 h-3 text-amber-400" />
                               <span>+ Anexar</span>
                             </button>
                           )}
@@ -1048,6 +1073,202 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         onChange={handleReceiptFileChange}
       />
 
+      {/* Dedicated Modal for Uploading and Managing Sporadic Service Receipts */}
+      {receiptModalService && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Comprovante de Pagamento</h3>
+                  <p className="text-xs text-slate-400 truncate max-w-[280px]">
+                    {receiptModalService.description}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptModalService(null);
+                  setIsReplacingReceipt(false);
+                }}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Service Details Card */}
+              <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Cliente:</span>
+                  <span className="font-bold text-white">
+                    {clients.find((c) => c.id === receiptModalService.clientId)?.name || 'Cliente'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Valor do Lançamento:</span>
+                  <span className="font-bold text-emerald-400 font-mono text-sm">
+                    {formatCurrency(receiptModalService.amount)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Status Atual:</span>
+                  <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${receiptModalService.status === 'realized' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                    {receiptModalService.status === 'realized' ? 'Realizado (Pago)' : 'Pendente (Aguardando Pagamento)'}
+                  </span>
+                </div>
+                {receiptModalService.dueDate && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Vencimento:</span>
+                    <span className="font-mono text-slate-300">
+                      {receiptModalService.dueDate.split('-').reverse().join('/')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Existing Attached Receipt Card */}
+              {receiptModalService.paymentReceipt && !isReplacingReceipt && (
+                <div className="p-4 bg-emerald-950/30 border border-emerald-600/40 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div className="overflow-hidden">
+                      <span className="text-xs font-bold text-emerald-300 block">Comprovante Salvo</span>
+                      <span className="text-xs text-white font-semibold truncate block">
+                        {receiptModalService.paymentReceipt.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        {(receiptModalService.paymentReceipt.size / 1024).toFixed(0)} KB • Enviado em{' '}
+                        {new Date(receiptModalService.paymentReceipt.uploadedAt).toLocaleDateString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Thumbnail preview if it's an image */}
+                  {receiptModalService.paymentReceipt.dataUrl?.startsWith('data:image/') && (
+                    <div className="max-h-52 rounded-lg overflow-hidden border border-slate-700 bg-black/50 flex items-center justify-center p-2">
+                      <img
+                        src={receiptModalService.paymentReceipt.dataUrl}
+                        alt="Comprovante"
+                        className="max-h-48 w-auto object-contain rounded"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-800/40">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        downloadDataUrl(
+                          receiptModalService.paymentReceipt!.dataUrl,
+                          receiptModalService.paymentReceipt!.name
+                        )
+                      }
+                      className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-center flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Baixar Comprovante</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsReplacingReceipt(true)}
+                      className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-xl transition-colors border border-slate-700 cursor-pointer"
+                    >
+                      Substituir
+                    </button>
+
+                    {onRemoveSporadicReceipt && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Deseja realmente remover este comprovante?')) {
+                            onRemoveSporadicReceipt(receiptModalService.id);
+                            setReceiptModalService(null);
+                          }
+                        }}
+                        className="p-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded-xl transition-colors border border-rose-800 cursor-pointer"
+                        title="Excluir comprovante"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Upload Zone (if no receipt OR user chose to replace) */}
+              {(!receiptModalService.paymentReceipt || isReplacingReceipt) && (
+                <div className="space-y-3">
+                  <div
+                    onClick={() => {
+                      if (!isProcessingReceipt && receiptInputRef.current) {
+                        receiptInputRef.current.value = '';
+                        receiptInputRef.current.click();
+                      }
+                    }}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+                      isProcessingReceipt
+                        ? 'border-amber-500/50 bg-amber-950/20 pointer-events-none'
+                        : 'border-slate-700 hover:border-amber-500/60 bg-slate-950/60 hover:bg-slate-900/60'
+                    }`}
+                  >
+                    {isProcessingReceipt ? (
+                      <div className="flex flex-col items-center justify-center py-3 space-y-2">
+                        <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                        <span className="text-xs font-bold text-white">Processando e otimizando comprovante...</span>
+                        <span className="text-[11px] text-slate-400">Comprimindo imagem para salvar com segurança</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                        <span className="font-bold text-white block text-sm">
+                          {isReplacingReceipt ? 'Selecionar Novo Arquivo' : 'Carregar Comprovante de Pagamento'}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-1">
+                          Imagens (JPG, PNG, WebP) ou PDF até 15MB
+                        </span>
+                        <span className="text-[10px] text-amber-400/90 block mt-0.5">
+                          Fotos de celulares são redimensionadas automaticamente
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  <label className="flex items-center gap-2 p-2.5 bg-slate-950/80 rounded-xl border border-slate-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={receiptAutoMarkPaid}
+                      onChange={(e) => setReceiptAutoMarkPaid(e.target.checked)}
+                      className="rounded border-slate-700 text-amber-500 focus:ring-amber-500 h-4 w-4 bg-slate-900 cursor-pointer"
+                    />
+                    <span className="text-slate-300 font-medium text-xs">
+                      Atualizar status do serviço automaticamente para <strong className="text-emerald-400">"Realizado (Pago)"</strong>
+                    </span>
+                  </label>
+
+                  {isReplacingReceipt && receiptModalService.paymentReceipt && (
+                    <button
+                      type="button"
+                      onClick={() => setIsReplacingReceipt(false)}
+                      className="w-full py-1.5 text-center text-slate-400 hover:text-white text-xs font-medium cursor-pointer"
+                    >
+                      Cancelar substituição
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Document / PDF Viewer Modal */}
       {viewingAttachment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
@@ -1067,17 +1288,16 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                <a
-                  href={viewingAttachment.attachment.dataUrl}
-                  download={viewingAttachment.attachment.name}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors"
+                <button
+                  onClick={() => downloadDataUrl(viewingAttachment.attachment.dataUrl, viewingAttachment.attachment.name)}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download</span>
-                </a>
+                </button>
                 <button
                   onClick={() => setViewingAttachment(null)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1092,6 +1312,14 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                   alt={viewingAttachment.attachment.name}
                   className="max-h-[75vh] max-w-full object-contain rounded-xl border border-slate-800 shadow-lg"
                 />
+              ) : viewingAttachment.attachment.dataUrl.includes('[large_') ? (
+                <div className="p-8 text-center max-w-md bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                  <FileText className="w-12 h-12 text-amber-400 mx-auto" />
+                  <h4 className="text-sm font-bold text-white">{viewingAttachment.attachment.name}</h4>
+                  <p className="text-xs text-slate-400">
+                    O documento está armazenado com segurança. Use o botão acima para baixar e visualizar o arquivo original.
+                  </p>
+                </div>
               ) : (
                 <iframe
                   src={viewingAttachment.attachment.dataUrl}

@@ -81,8 +81,12 @@ export const getStoredClients = (): Client[] => {
 };
 
 export const saveStoredClients = (clients: Client[]) => {
-  const filtered = clients.filter((c) => !MOCK_CLIENT_IDS.has(c.id));
-  localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
+  try {
+    const filtered = clients.filter((c) => !MOCK_CLIENT_IDS.has(c.id));
+    localStorage.setItem(KEYS.CLIENTS, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('Error saving clients to localStorage:', err);
+  }
 };
 
 export const getStoredBoletos = (): Boleto[] => {
@@ -110,8 +114,28 @@ export const getStoredBoletos = (): Boleto[] => {
 };
 
 export const saveStoredBoletos = (boletos: Boleto[]) => {
-  const filtered = boletos.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
-  localStorage.setItem(KEYS.BOLETOS, JSON.stringify(filtered));
+  try {
+    const filtered = boletos.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
+    localStorage.setItem(KEYS.BOLETOS, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('LocalStorage quota exceeded while saving boletos, pruning large attachments:', err);
+    try {
+      const pruned = boletos
+        .filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId))
+        .map((b) => ({
+          ...b,
+          pdfFile: b.pdfFile && b.pdfFile.dataUrl.length > 200000
+            ? { ...b.pdfFile, dataUrl: b.pdfFile.dataUrl.substring(0, 500) + '...[large_pdf_file_saved_locally]' }
+            : b.pdfFile,
+          paymentReceipt: b.paymentReceipt && b.paymentReceipt.dataUrl.length > 200000
+            ? { ...b.paymentReceipt, dataUrl: b.paymentReceipt.dataUrl.substring(0, 500) + '...[large_file_saved_locally]' }
+            : b.paymentReceipt,
+        }));
+      localStorage.setItem(KEYS.BOLETOS, JSON.stringify(pruned));
+    } catch (e2) {
+      console.error('Failed to save boletos to localStorage:', e2);
+    }
+  }
 };
 
 export const getStoredNFes = (): NotaFiscal[] => {
@@ -128,8 +152,12 @@ export const getStoredNFes = (): NotaFiscal[] => {
 };
 
 export const saveStoredNFes = (nfes: NotaFiscal[]) => {
-  const filtered = nfes.filter((n) => !MOCK_NFE_IDS.has(n.id) && !MOCK_CLIENT_IDS.has(n.clientId));
-  localStorage.setItem(KEYS.NFES, JSON.stringify(filtered));
+  try {
+    const filtered = nfes.filter((n) => !MOCK_NFE_IDS.has(n.id) && !MOCK_CLIENT_IDS.has(n.clientId));
+    localStorage.setItem(KEYS.NFES, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('Error saving NFes to localStorage:', err);
+  }
 };
 
 export const getStoredTickets = (): SupportTicket[] => {
@@ -146,8 +174,12 @@ export const getStoredTickets = (): SupportTicket[] => {
 };
 
 export const saveStoredTickets = (tickets: SupportTicket[]) => {
-  const filtered = tickets.filter((t) => !MOCK_TICKET_IDS.has(t.id) && !MOCK_CLIENT_IDS.has(t.clientId));
-  localStorage.setItem(KEYS.TICKETS, JSON.stringify(filtered));
+  try {
+    const filtered = tickets.filter((t) => !MOCK_TICKET_IDS.has(t.id) && !MOCK_CLIENT_IDS.has(t.clientId));
+    localStorage.setItem(KEYS.TICKETS, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('Error saving tickets to localStorage:', err);
+  }
 };
 
 export const getStoredSporadicServices = (): SporadicService[] => {
@@ -164,8 +196,28 @@ export const getStoredSporadicServices = (): SporadicService[] => {
 };
 
 export const saveStoredSporadicServices = (services: SporadicService[]) => {
-  const filtered = services.filter((s) => !MOCK_SPORADIC_IDS.has(s.id) && !MOCK_CLIENT_IDS.has(s.clientId));
-  localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(filtered));
+  try {
+    const filtered = services.filter((s) => !MOCK_SPORADIC_IDS.has(s.id) && !MOCK_CLIENT_IDS.has(s.clientId));
+    localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('LocalStorage quota exceeded while saving sporadic services, pruning large attachments:', err);
+    try {
+      const pruned = services
+        .filter((s) => !MOCK_SPORADIC_IDS.has(s.id) && !MOCK_CLIENT_IDS.has(s.clientId))
+        .map((s) => ({
+          ...s,
+          pdfFile: s.pdfFile && s.pdfFile.dataUrl.length > 200000
+            ? { ...s.pdfFile, dataUrl: s.pdfFile.dataUrl.substring(0, 500) + '...[large_pdf_file_saved_locally]' }
+            : s.pdfFile,
+          paymentReceipt: s.paymentReceipt && s.paymentReceipt.dataUrl.length > 200000
+            ? { ...s.paymentReceipt, dataUrl: s.paymentReceipt.dataUrl.substring(0, 500) + '...[large_file_saved_locally]' }
+            : s.paymentReceipt,
+        }));
+      localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(pruned));
+    } catch (e2) {
+      console.error('Failed to save sporadic services to localStorage:', e2);
+    }
+  }
 };
 
 export const getStoredNotifications = (): AppNotification[] => {
@@ -179,7 +231,11 @@ export const getStoredNotifications = (): AppNotification[] => {
 };
 
 export const saveStoredNotifications = (notifications: AppNotification[]) => {
-  localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  try {
+    localStorage.setItem(KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  } catch (err) {
+    console.warn('Error saving notifications to localStorage:', err);
+  }
 };
 
 export const getStoredAdminPassword = (): string => {

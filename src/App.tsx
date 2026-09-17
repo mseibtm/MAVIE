@@ -40,6 +40,8 @@ import {
   saveTicketToFirestore,
   deleteTicketFromFirestore,
   saveSporadicServiceToFirestore,
+  saveSporadicReceiptToFirestore,
+  removeSporadicReceiptFromFirestore,
   deleteSporadicServiceFromFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
@@ -282,11 +284,11 @@ export default function App() {
             if (ls) {
               return {
                 ...rs,
-                pdfFile: (ls.pdfFile?.dataUrl && !ls.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
-                  ? ls.pdfFile
+                pdfFile: (rs.pdfFile && rs.pdfFile.dataUrl?.includes('[large_'))
+                  ? (ls.pdfFile || rs.pdfFile)
                   : rs.pdfFile,
-                paymentReceipt: (ls.paymentReceipt?.dataUrl && !ls.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
-                  ? ls.paymentReceipt
+                paymentReceipt: (rs.paymentReceipt && rs.paymentReceipt.dataUrl?.includes('[large_'))
+                  ? (ls.paymentReceipt || rs.paymentReceipt)
                   : rs.paymentReceipt,
               };
             }
@@ -405,9 +407,10 @@ export default function App() {
         return s;
       });
       saveStoredSporadicServices(updated);
-      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
       return updated;
     });
+
+    saveSporadicReceiptToFirestore(serviceId, receipt, true);
 
     // Notify admin of sporadic receipt upload
     const targetService = sporadicServices.find((s) => s.id === serviceId);
@@ -426,21 +429,18 @@ export default function App() {
   };
 
   const handleRemoveSporadicReceipt = (serviceId: string) => {
-    let updatedItem: SporadicService | undefined;
     setSporadicServices((prev) => {
       const updated = prev.map((s) => {
         if (s.id === serviceId) {
           const { paymentReceipt, ...rest } = s;
-          const item = rest as SporadicService;
-          updatedItem = item;
-          return item;
+          return rest as SporadicService;
         }
         return s;
       });
       saveStoredSporadicServices(updated);
-      if (updatedItem) saveSporadicServiceToFirestore(updatedItem);
       return updated;
     });
+    removeSporadicReceiptFromFirestore(serviceId);
     addToast('info', 'Comprovante Removido', 'O comprovante foi removido do serviço esporádico.');
   };
 
