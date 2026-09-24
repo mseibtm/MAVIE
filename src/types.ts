@@ -121,3 +121,39 @@ export interface SporadicService {
   barcode?: string;
   createdAt: string;
 }
+
+export type ExpenseCategory =
+  | 'infrastructure'
+  | 'software'
+  | 'salary'
+  | 'taxes'
+  | 'marketing'
+  | 'office'
+  | 'accounting'
+  | 'services'
+  | 'other';
+
+export interface Expense {
+  id: string;
+  description: string;
+  category: ExpenseCategory | string;
+  amount: number;
+  dueDate: string; // YYYY-MM-DD (Vencimento da despesa)
+  paymentDate?: string; // YYYY-MM-DD (Data efetiva de pagamento se quitada)
+  status: 'paid' | 'pending';
+  month: string; // YYYY-MM (Mês de competência para cálculo DRE / Balanço)
+  paymentMethod?: 'pix' | 'boleto' | 'transfer' | 'card' | 'cash';
+  receipt?: PDFAttachment; // Comprovante de pagamento da despesa
+  notes?: string;
+  createdAt: string;
+}
+
+export interface MonthlyBalance {
+  id: string; // Ex: bal-YYYY-MM
+  month: string; // YYYY-MM
+  bankAccount: string; // Nome da instituição ou conta (ex: Banco Inter, Itaú Empresas, Caixa)
+  initialBalance: number; // Saldo em conta bancária (R$)
+  currentBalance?: number; // Saldo atualizado
+  updatedAt: string;
+  notes?: string;
+}

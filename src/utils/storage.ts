@@ -1,5 +1,5 @@
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession, SporadicService } from '../types';
-import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession, SporadicService, Expense, MonthlyBalance } from '../types';
+import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES, INITIAL_EXPENSES, INITIAL_MONTHLY_BALANCES } from '../data/mockData';
 
 const KEYS = {
   CLIENTS: 'app_portal_clients',
@@ -7,6 +7,8 @@ const KEYS = {
   NFES: 'app_portal_nfes',
   TICKETS: 'app_portal_tickets',
   SPORADIC_SERVICES: 'app_portal_sporadic_services',
+  EXPENSES: 'app_portal_expenses',
+  MONTHLY_BALANCES: 'app_portal_monthly_balances',
   NOTIFICATIONS: 'app_portal_notifications',
   ADMIN_PASSWORD: 'app_portal_admin_password',
   SESSION: 'app_portal_user_session',
@@ -247,10 +249,61 @@ export const saveStoredAdminPassword = (password: string) => {
   localStorage.setItem(KEYS.ADMIN_PASSWORD, password);
 };
 
+export const getStoredExpenses = (): Expense[] => {
+  const data = localStorage.getItem(KEYS.EXPENSES);
+  if (!data) return INITIAL_EXPENSES;
+  try {
+    const list: Expense[] = JSON.parse(data);
+    return list;
+  } catch {
+    return INITIAL_EXPENSES;
+  }
+};
+
+export const saveStoredExpenses = (expenses: Expense[]) => {
+  try {
+    localStorage.setItem(KEYS.EXPENSES, JSON.stringify(expenses));
+  } catch (err) {
+    console.warn('Error saving expenses to localStorage:', err);
+    try {
+      const pruned = expenses.map((e) => ({
+        ...e,
+        receipt: e.receipt && e.receipt.dataUrl.length > 200000
+          ? { ...e.receipt, dataUrl: e.receipt.dataUrl.substring(0, 500) + '...[large_receipt_saved_locally]' }
+          : e.receipt,
+      }));
+      localStorage.setItem(KEYS.EXPENSES, JSON.stringify(pruned));
+    } catch (e2) {
+      console.error('Failed to save expenses even after pruning:', e2);
+    }
+  }
+};
+
+export const getStoredMonthlyBalances = (): MonthlyBalance[] => {
+  const data = localStorage.getItem(KEYS.MONTHLY_BALANCES);
+  if (!data) return INITIAL_MONTHLY_BALANCES;
+  try {
+    const list: MonthlyBalance[] = JSON.parse(data);
+    return list;
+  } catch {
+    return INITIAL_MONTHLY_BALANCES;
+  }
+};
+
+export const saveStoredMonthlyBalances = (balances: MonthlyBalance[]) => {
+  try {
+    localStorage.setItem(KEYS.MONTHLY_BALANCES, JSON.stringify(balances));
+  } catch (err) {
+    console.warn('Error saving monthly balances to localStorage:', err);
+  }
+};
+
 export const resetToInitialData = () => {
   localStorage.setItem(KEYS.CLIENTS, JSON.stringify(INITIAL_CLIENTS));
   localStorage.setItem(KEYS.BOLETOS, JSON.stringify(INITIAL_BOLETOS));
   localStorage.setItem(KEYS.NFES, JSON.stringify(INITIAL_NFES));
   localStorage.setItem(KEYS.TICKETS, JSON.stringify(INITIAL_TICKETS));
   localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(INITIAL_SPORADIC_SERVICES));
+  localStorage.setItem(KEYS.EXPENSES, JSON.stringify(INITIAL_EXPENSES));
+  localStorage.setItem(KEYS.MONTHLY_BALANCES, JSON.stringify(INITIAL_MONTHLY_BALANCES));
 };

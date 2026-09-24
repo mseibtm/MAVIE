@@ -10,7 +10,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment, Expense, MonthlyBalance } from '../types';
 import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 // Firestore collections
@@ -20,6 +20,8 @@ const COLS = {
   NFES: 'nfes',
   TICKETS: 'tickets',
   SPORADIC: 'sporadic_services',
+  EXPENSES: 'expenses',
+  MONTHLY_BALANCES: 'monthly_balances',
   NOTIFICATIONS: 'notifications',
 };
 
@@ -393,5 +395,71 @@ export async function deleteSporadicServiceFromFirestore(id: string) {
     await deleteDoc(doc(db, COLS.SPORADIC, id));
   } catch (err) {
     console.error('Error deleting sporadic service from Firestore:', err);
+  }
+}
+
+export function subscribeExpenses(callback: (expenses: Expense[]) => void) {
+  return onSnapshot(
+    collection(db, COLS.EXPENSES),
+    (snap) => {
+      const list: Expense[] = [];
+      snap.forEach((d) => list.push(d.data() as Expense));
+      callback(list);
+    },
+    (err) => console.warn('Firestore expenses listener error:', err)
+  );
+}
+
+export async function saveExpenseToFirestore(expense: Expense) {
+  try {
+    const docToSave: Record<string, any> = { ...expense };
+    if (docToSave.receipt && docToSave.receipt.dataUrl && docToSave.receipt.dataUrl.length > 700000) {
+      docToSave.receipt = {
+        name: docToSave.receipt.name,
+        size: docToSave.receipt.size,
+        uploadedAt: docToSave.receipt.uploadedAt,
+        dataUrl: docToSave.receipt.dataUrl.substring(0, 1000) + '...[large_receipt_file_saved_locally]',
+        isLargeFile: true,
+      };
+    }
+    await setDoc(doc(db, COLS.EXPENSES, expense.id), removeUndefinedFields(docToSave), { merge: true });
+  } catch (err) {
+    console.error('Error saving expense to Firestore:', err);
+  }
+}
+
+export async function deleteExpenseFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.EXPENSES, id));
+  } catch (err) {
+    console.error('Error deleting expense from Firestore:', err);
+  }
+}
+
+export function subscribeMonthlyBalances(callback: (balances: MonthlyBalance[]) => void) {
+  return onSnapshot(
+    collection(db, COLS.MONTHLY_BALANCES),
+    (snap) => {
+      const list: MonthlyBalance[] = [];
+      snap.forEach((d) => list.push(d.data() as MonthlyBalance));
+      callback(list);
+    },
+    (err) => console.warn('Firestore monthly balances listener error:', err)
+  );
+}
+
+export async function saveMonthlyBalanceToFirestore(balance: MonthlyBalance) {
+  try {
+    await setDoc(doc(db, COLS.MONTHLY_BALANCES, balance.id), removeUndefinedFields(balance), { merge: true });
+  } catch (err) {
+    console.error('Error saving monthly balance to Firestore:', err);
+  }
+}
+
+export async function deleteMonthlyBalanceFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.MONTHLY_BALANCES, id));
+  } catch (err) {
+    console.error('Error deleting monthly balance from Firestore:', err);
   }
 }

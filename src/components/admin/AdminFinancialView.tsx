@@ -27,6 +27,12 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  Landmark,
+  Scale,
+  ArrowUpRight,
+  ArrowDownRight,
+  PiggyBank,
+  PieChart,
 } from 'lucide-react';
 import {
   BarChart,
@@ -38,14 +44,20 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { Client, Boleto, SporadicService, PDFAttachment } from '../../types';
+import { Client, Boleto, SporadicService, PDFAttachment, Expense, MonthlyBalance } from '../../types';
 import { processReceiptFile, downloadDataUrl } from '../../utils/boletoPdfGenerator';
 import { SporadicServiceModal } from '../modals/SporadicServiceModal';
+import { ExpenseModal } from '../modals/ExpenseModal';
+import { AccountBalanceModal } from '../modals/AccountBalanceModal';
+import { CashflowForecastView } from './CashflowForecastView';
+import { ExpensesManager } from './ExpensesManager';
 
 interface AdminFinancialViewProps {
   clients: Client[];
   boletos: Boleto[];
   sporadicServices: SporadicService[];
+  expenses?: Expense[];
+  monthlyBalances?: MonthlyBalance[];
   onAddBoleto: (boleto: Omit<Boleto, 'id' | 'createdAt'>) => void;
   onAddSporadicService: (service: Omit<SporadicService, 'id' | 'createdAt'>) => void;
   onUpdateSporadicStatus: (id: string, status: 'realized' | 'pending') => void;
@@ -54,6 +66,10 @@ interface AdminFinancialViewProps {
   onRemoveSporadicBoletoPdf?: (serviceId: string) => void;
   onUploadSporadicReceipt?: (serviceId: string, receipt: PDFAttachment) => void;
   onRemoveSporadicReceipt?: (serviceId: string) => void;
+  onAddExpense?: (expense: Omit<Expense, 'id' | 'createdAt'>) => void;
+  onUpdateExpense?: (id: string, expense: Partial<Expense>) => void;
+  onDeleteExpense?: (id: string) => void;
+  onSaveMonthlyBalance?: (balance: MonthlyBalance) => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -61,6 +77,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   clients,
   boletos,
   sporadicServices = [],
+  expenses = [],
+  monthlyBalances = [],
   onAddBoleto,
   onAddSporadicService,
   onUpdateSporadicStatus,
@@ -69,15 +87,24 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   onRemoveSporadicBoletoPdf,
   onUploadSporadicReceipt,
   onRemoveSporadicReceipt,
+  onAddExpense,
+  onUpdateExpense,
+  onDeleteExpense,
+  onSaveMonthlyBalance,
   onToast,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'realized' | 'mrr' | 'sporadic'>('realized');
+  const [activeSubTab, setActiveSubTab] = useState<'cashflow' | 'expenses' | 'realized' | 'mrr' | 'sporadic'>('cashflow');
 
   // Month / Period Filter state
   const [selectedPeriod, setSelectedPeriod] = useState<string>('all'); // 'all' or 'YYYY-MM'
 
   // Modal State for New Sporadic Service
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Expense and Account Balance Modal States
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
 
   // Viewing attachment modal (Boleto PDF or Payment receipt)
   const [viewingAttachment, setViewingAttachment] = useState<{ title: string; attachment: PDFAttachment } | null>(null);
@@ -186,6 +213,16 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
     sporadicServices.forEach((s) => {
       if (s.date) periodsSet.add(s.date.substring(0, 7));
+      if (s.dueDate) periodsSet.add(s.dueDate.substring(0, 7));
+    });
+
+    expenses.forEach((e) => {
+      if (e.month) periodsSet.add(e.month);
+      if (e.dueDate) periodsSet.add(e.dueDate.substring(0, 7));
+    });
+
+    monthlyBalances.forEach((b) => {
+      if (b.month) periodsSet.add(b.month);
     });
 
     // Ensure current month is present
@@ -302,25 +339,49 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 mb-1">
             <TrendingUp className="w-4 h-4" />
-            <span>Gestão Financeira & Faturamento Realizado</span>
+            <span>Gestão Financeira, DRE & Previsão de Caixa</span>
           </div>
-          <h1 className="text-2xl font-black text-white">DRE, Serv. Esporádicos & Faturamento Realizado</h1>
+          <h1 className="text-2xl font-black text-white">Painel Financeiro Corporativo</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Acompanhe a soma total do faturamento realizado (Mensalidades + Serviços Esporádicos), com filtros por mês ou todo o período.
+            Controle de receita x despesa, previsão de entradas (mensalidades e serviços esporádicos), saldo bancário e faturamento.
           </p>
         </div>
 
         {/* Sub-Tabs Navigation */}
-        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <div className="flex items-center bg-slate-950 p-1.5 rounded-xl border border-slate-800 flex-wrap gap-1">
+          <button
+            onClick={() => setActiveSubTab('cashflow')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeSubTab === 'cashflow'
+                ? 'bg-indigo-600 text-white shadow-md font-black ring-1 ring-indigo-400/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Scale className="w-4 h-4 text-indigo-300" />
+            <span>Fluxo & Previsão</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('expenses')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeSubTab === 'expenses'
+                ? 'bg-rose-600 text-white shadow-md font-black ring-1 ring-rose-400/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <DollarSign className="w-4 h-4 text-rose-300" />
+            <span>Despesas ({expenses.length})</span>
+          </button>
+
           <button
             onClick={() => setActiveSubTab('realized')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               activeSubTab === 'realized'
-                ? 'bg-emerald-600 text-white shadow-md'
+                ? 'bg-emerald-600 text-white shadow-md font-black'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
             }`}
           >
@@ -330,7 +391,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
           <button
             onClick={() => setActiveSubTab('sporadic')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               activeSubTab === 'sporadic'
                 ? 'bg-amber-500 text-slate-950 shadow-md font-black'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -342,9 +403,9 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
           <button
             onClick={() => setActiveSubTab('mrr')}
-            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               activeSubTab === 'mrr'
-                ? 'bg-sky-600 text-white shadow-md'
+                ? 'bg-sky-600 text-white shadow-md font-black'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
             }`}
           >
@@ -354,23 +415,23 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         </div>
       </div>
 
-      {/* Period Filter Selector Toolbar (Available on Realized and Sporadic tabs) */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      {/* Period Filter Selector Toolbar with Quick Action Buttons */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-emerald-950 border border-emerald-800/80 rounded-xl text-emerald-400">
             <Filter className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-xs font-bold text-slate-300 block">Filtrar Período de Apuração:</span>
-            <span className="text-[11px] text-slate-400">Selecione um mês específico ou visualize todo o período.</span>
+            <span className="text-xs font-bold text-slate-300 block">Período de Apuração & Competência:</span>
+            <span className="text-[11px] text-slate-400">Selecione o mês para atualizar os cálculos de entradas, saídas e projeção de saldo.</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="w-full sm:w-auto px-4 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-emerald-400 focus:ring-2 focus:ring-emerald-500 shadow-inner"
+            className="px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-bold text-emerald-400 focus:ring-2 focus:ring-emerald-500 shadow-inner min-w-[200px]"
           >
             <option value="all">🗓️ Todo o Período (Visão Geral Global)</option>
             {periodOptions.map((opt) => (
@@ -381,16 +442,84 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
           </select>
 
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 shrink-0 transition-all active:scale-95"
+            onClick={() => {
+              setEditingExpense(null);
+              setIsExpenseModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-900/30 flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
+            title="Lançar nova despesa no mês"
           >
             <Plus className="w-4 h-4" />
-            <span>Novo Serviço Esporádico</span>
+            <span>Lançar Despesa</span>
+          </button>
+
+          <button
+            onClick={() => setIsBalanceModalOpen(true)}
+            className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs rounded-xl shadow-md shadow-sky-900/30 flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
+            title="Ajustar saldo em conta bancária"
+          >
+            <Landmark className="w-4 h-4" />
+            <span>Saldo em Conta</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 shrink-0 transition-all active:scale-95 cursor-pointer"
+            title="Cadastrar serviço esporádico"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Serviço Esporádico</span>
           </button>
         </div>
       </div>
 
-      {/* TAB 1: FATURAMENTO REALIZADO (SOMA DE MENSALIDADES + SERVIÇOS ESPORÁDICOS) */}
+      {/* SUBTAB 1: FLUXO DE CAIXA & PREVISÃO (DRE, RECEITA X DESPESA, SALDO EM CONTA E PREVISÃO DE ENTRADAS) */}
+      {activeSubTab === 'cashflow' && (
+        <CashflowForecastView
+          clients={clients}
+          boletos={boletos}
+          sporadicServices={sporadicServices}
+          expenses={expenses}
+          monthlyBalances={monthlyBalances}
+          selectedPeriod={selectedPeriod}
+          onOpenExpenseModal={() => {
+            setEditingExpense(null);
+            setIsExpenseModalOpen(true);
+          }}
+          onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+          onOpenSporadicModal={() => setIsModalOpen(true)}
+          formatCurrency={formatCurrency}
+        />
+      )}
+
+      {/* SUBTAB 2: LANÇAMENTO DE DESPESAS MÊS A MÊS */}
+      {activeSubTab === 'expenses' && (
+        <ExpensesManager
+          expenses={expenses}
+          monthlyBalances={monthlyBalances}
+          selectedPeriod={selectedPeriod}
+          onAddExpense={() => {
+            setEditingExpense(null);
+            setIsExpenseModalOpen(true);
+          }}
+          onEditExpense={(expense) => {
+            setEditingExpense(expense);
+            setIsExpenseModalOpen(true);
+          }}
+          onUpdateExpense={(id, fields) => {
+            if (onUpdateExpense) onUpdateExpense(id, fields);
+          }}
+          onDeleteExpense={(id) => {
+            if (onDeleteExpense) onDeleteExpense(id);
+          }}
+          onOpenBalanceModal={() => setIsBalanceModalOpen(true)}
+          onViewAttachment={(title, attachment) => setViewingAttachment({ title, attachment })}
+          formatCurrency={formatCurrency}
+          onToast={onToast}
+        />
+      )}
+
+      {/* TAB 3: FATURAMENTO REALIZADO (SOMA DE MENSALIDADES + SERVIÇOS ESPORÁDICOS) */}
       {activeSubTab === 'realized' && (
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* Main KPI Cards for Realized Revenue */}
@@ -1331,6 +1460,41 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Expense Modal (Lançamento e Edição de Despesas Mês a Mês) */}
+      <ExpenseModal
+        isOpen={isExpenseModalOpen}
+        onClose={() => {
+          setIsExpenseModalOpen(false);
+          setEditingExpense(null);
+        }}
+        onSave={(expenseData, existingId) => {
+          if (existingId) {
+            if (onUpdateExpense) onUpdateExpense(existingId, expenseData);
+          } else {
+            if (onAddExpense) onAddExpense(expenseData);
+          }
+        }}
+        initialExpense={editingExpense}
+        defaultMonth={selectedPeriod !== 'all' ? selectedPeriod : new Date().toISOString().substring(0, 7)}
+        onToast={onToast}
+      />
+
+      {/* Account Balance Modal (Saldo em Conta Bancária) */}
+      <AccountBalanceModal
+        isOpen={isBalanceModalOpen}
+        onClose={() => setIsBalanceModalOpen(false)}
+        onSave={(balance) => {
+          if (onSaveMonthlyBalance) onSaveMonthlyBalance(balance);
+        }}
+        currentBalanceRecord={
+          monthlyBalances.find(
+            (b) => b.month === (selectedPeriod !== 'all' ? selectedPeriod : new Date().toISOString().substring(0, 7))
+          ) || (monthlyBalances.length > 0 ? monthlyBalances[0] : null)
+        }
+        selectedMonth={selectedPeriod !== 'all' ? selectedPeriod : new Date().toISOString().substring(0, 7)}
+        onToast={onToast}
+      />
     </div>
   );
 };

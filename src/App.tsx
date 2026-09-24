@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification, SporadicService } from './types';
+import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification, SporadicService, Expense, MonthlyBalance } from './types';
 import {
   getStoredClients, saveStoredClients,
   getStoredBoletos, saveStoredBoletos,
   getStoredNFes, saveStoredNFes,
   getStoredTickets, saveStoredTickets,
   getStoredSporadicServices, saveStoredSporadicServices,
+  getStoredExpenses, saveStoredExpenses,
+  getStoredMonthlyBalances, saveStoredMonthlyBalances,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
   getStoredSession, saveStoredSession, touchStoredSession,
@@ -26,6 +28,8 @@ import {
   subscribeNFes,
   subscribeTickets,
   subscribeSporadicServices,
+  subscribeExpenses,
+  subscribeMonthlyBalances,
   subscribeNotifications,
   subscribeAdminPassword,
   saveClientToFirestore,
@@ -43,6 +47,9 @@ import {
   saveSporadicReceiptToFirestore,
   removeSporadicReceiptFromFirestore,
   deleteSporadicServiceFromFirestore,
+  saveExpenseToFirestore,
+  deleteExpenseFromFirestore,
+  saveMonthlyBalanceToFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
@@ -82,6 +89,8 @@ export default function App() {
   const [nfes, setNfes] = useState<NotaFiscal[]>([]);
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [sporadicServices, setSporadicServices] = useState<SporadicService[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [monthlyBalances, setMonthlyBalances] = useState<MonthlyBalance[]>([]);
 
   // Notifications & Push Permission state
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -140,6 +149,8 @@ export default function App() {
     setNfes(getStoredNFes());
     setTickets(getStoredTickets());
     setSporadicServices(getStoredSporadicServices());
+    setExpenses(getStoredExpenses());
+    setMonthlyBalances(getStoredMonthlyBalances());
     setAdminPassword(getStoredAdminPassword());
     
     // Check due dates and load notifications
@@ -298,6 +309,31 @@ export default function App() {
           return mergedRemote;
         });
       });
+      const unsubExpenses = subscribeExpenses((remoteExpenses) => {
+        setExpenses((prevLocal) => {
+          const localMap = new Map<string, Expense>(prevLocal.map((e) => [e.id, e]));
+          const mergedRemote = remoteExpenses.map((re) => {
+            const le = localMap.get(re.id);
+            if (le) {
+              return {
+                ...re,
+                receipt: (re.receipt && re.receipt.dataUrl?.includes('[large_'))
+                  ? (le.receipt || re.receipt)
+                  : re.receipt,
+              };
+            }
+            return re;
+          });
+          saveStoredExpenses(mergedRemote);
+          return mergedRemote;
+        });
+      });
+      const unsubBalances = subscribeMonthlyBalances((remoteBalances) => {
+        if (remoteBalances && remoteBalances.length > 0) {
+          setMonthlyBalances(remoteBalances);
+          saveStoredMonthlyBalances(remoteBalances);
+        }
+      });
       const unsubNotifs = subscribeNotifications((nt) => {
         setNotifications((prevNotifs) => {
           const cleaned = cleanupOrphanNotifications(nt, getStoredClients(), getStoredBoletos());
@@ -314,6 +350,8 @@ export default function App() {
         unsubNfes();
         unsubTickets();
         unsubSporadic();
+        unsubExpenses();
+        unsubBalances();
         unsubNotifs();
         unsubAdminPass();
       };
@@ -512,7 +550,9 @@ export default function App() {
       setBoletos(getStoredBoletos());
       setNfes(getStoredNFes());
       setTickets(getStoredTickets());
-      addToast('info', 'Dados Restaurados', 'O banco de dados foi atualizado com os clientes e documentos vigentes.');
+      setExpenses(getStoredExpenses());
+      setMonthlyBalances(getStoredMonthlyBalances());
+      addToast('info', 'Dados Restaurados', 'O banco de dados foi atualizado com os dados e lançamentos vigentes.');
     }
   };
 
@@ -901,6 +941,61 @@ export default function App() {
     deleteNFeFromFirestore(nfeId);
   };
 
+  // Expense Handlers
+  const handleAddExpense = (expenseData: Omit<Expense, 'id' | 'createdAt'>) => {
+    const newExpense: Expense = {
+      ...expenseData,
+      id: `exp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newExpense, ...expenses];
+    setExpenses(updated);
+    saveStoredExpenses(updated);
+    saveExpenseToFirestore(newExpense);
+    addToast('success', 'Despesa Lançada', `A despesa "${newExpense.description}" foi registrada.`);
+  };
+
+  const handleUpdateExpense = (id: string, updatedFields: Partial<Expense>) => {
+    let updatedItem: Expense | undefined;
+    const updated = expenses.map((e) => {
+      if (e.id === id) {
+        updatedItem = { ...e, ...updatedFields };
+        return updatedItem;
+      }
+      return e;
+    });
+    setExpenses(updated);
+    saveStoredExpenses(updated);
+    if (updatedItem) {
+      saveExpenseToFirestore(updatedItem);
+    }
+    addToast('success', 'Despesa Atualizada', 'Alterações salvas com sucesso.');
+  };
+
+  const handleDeleteExpense = (id: string) => {
+    const updated = expenses.filter((e) => e.id !== id);
+    setExpenses(updated);
+    saveStoredExpenses(updated);
+    deleteExpenseFromFirestore(id);
+    addToast('info', 'Despesa Removida', 'A despesa foi removida dos registros.');
+  };
+
+  // Monthly Balance Handlers
+  const handleSaveMonthlyBalance = (balance: MonthlyBalance) => {
+    let exists = false;
+    const updated = monthlyBalances.map((b) => {
+      if (b.month === balance.month) {
+        exists = true;
+        return balance;
+      }
+      return b;
+    });
+    const finalBalances = exists ? updated : [balance, ...updated];
+    setMonthlyBalances(finalBalances);
+    saveStoredMonthlyBalances(finalBalances);
+    saveMonthlyBalanceToFirestore(balance);
+  };
+
   // Tickets CRUD
   const handleAddTicket = (ticketData: Omit<SupportTicket, 'id' | 'createdAt' | 'updatedAt' | 'messages'> & { initialMessage: string }) => {
     const now = new Date().toISOString();
@@ -1126,6 +1221,8 @@ export default function App() {
                 clients={clients}
                 boletos={boletos}
                 sporadicServices={sporadicServices}
+                expenses={expenses}
+                monthlyBalances={monthlyBalances}
                 onAddBoleto={handleAddBoleto}
                 onAddSporadicService={handleAddSporadicService}
                 onUpdateSporadicStatus={handleUpdateSporadicStatus}
@@ -1134,6 +1231,10 @@ export default function App() {
                 onRemoveSporadicBoletoPdf={handleRemoveSporadicBoletoPdf}
                 onUploadSporadicReceipt={handleUploadSporadicReceipt}
                 onRemoveSporadicReceipt={handleRemoveSporadicReceipt}
+                onAddExpense={handleAddExpense}
+                onUpdateExpense={handleUpdateExpense}
+                onDeleteExpense={handleDeleteExpense}
+                onSaveMonthlyBalance={handleSaveMonthlyBalance}
                 onToast={addToast}
               />
             )}

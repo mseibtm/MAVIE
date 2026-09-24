@@ -1,4 +1,4 @@
-import { Client, Boleto, NotaFiscal, SupportTicket, SporadicService } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, SporadicService, Expense, MonthlyBalance } from '../types';
 import { generateDigitableLine, generateNFeAccessKey } from '../utils/cpf';
 
 export const INITIAL_CLIENTS: Client[] = [
@@ -305,5 +305,87 @@ export const INITIAL_SPORADIC_SERVICES: SporadicService[] = [
     category: 'Serviço Avulso',
     notes: 'Aguardando quitação do cliente',
     createdAt: '2026-08-01T09:00:00Z',
+  },
+];
+
+export const INITIAL_EXPENSES: Expense[] = [
+  {
+    id: 'exp-1',
+    description: 'Servidores em Nuvem (AWS & Google Cloud)',
+    category: 'infrastructure',
+    amount: 480.0,
+    dueDate: '2026-09-10',
+    paymentDate: '2026-09-10',
+    status: 'paid',
+    month: '2026-09',
+    notes: 'Hospedagem de instâncias, storage e bancos de dados',
+    createdAt: '2026-09-01T08:00:00Z',
+  },
+  {
+    id: 'exp-2',
+    description: 'Licenças de Software (GitHub, Slack, Workspace)',
+    category: 'software',
+    amount: 320.0,
+    dueDate: '2026-09-15',
+    paymentDate: '2026-09-14',
+    status: 'paid',
+    month: '2026-09',
+    notes: 'Assinaturas essenciais de produtividade e desenvolvimento',
+    createdAt: '2026-09-01T08:00:00Z',
+  },
+  {
+    id: 'exp-3',
+    description: 'Honorários de Assessoria Contábil',
+    category: 'accounting',
+    amount: 750.0,
+    dueDate: '2026-09-25',
+    status: 'pending',
+    month: '2026-09',
+    notes: 'Fechamento contábil e obrigações acessórias',
+    createdAt: '2026-09-02T10:00:00Z',
+  },
+  {
+    id: 'exp-4',
+    description: 'Guia Simples Nacional (DAS / Tributos)',
+    category: 'taxes',
+    amount: 680.0,
+    dueDate: '2026-09-28',
+    status: 'pending',
+    month: '2026-09',
+    notes: 'Imposto sobre faturamento do mês anterior',
+    createdAt: '2026-09-05T11:00:00Z',
+  },
+  {
+    id: 'exp-5',
+    description: 'Link Dedicado Fibra Óptica Escritório',
+    category: 'office',
+    amount: 250.0,
+    dueDate: '2026-09-20',
+    paymentDate: '2026-09-19',
+    status: 'paid',
+    month: '2026-09',
+    notes: 'Conectividade e telefonia',
+    createdAt: '2026-09-01T08:00:00Z',
+  },
+];
+
+export const INITIAL_MONTHLY_BALANCES: MonthlyBalance[] = [
+  {
+    id: 'bal-2026-09',
+    month: '2026-09',
+    bankAccount: 'Conta Corrente PJ - Banco Inter / Itaú',
+    initialBalance: 8500.0,
+    currentBalance: 8500.0,
+    updatedAt: '2026-09-01T08:00:00Z',
+    notes: 'Saldo apurado no extrato bancário inicial do mês',
+  },
+  {
+    id: 'bal-2026-08',
+    month: '2026-08',
+    bankAccount: 'Conta Corrente PJ - Banco Inter / Itaú',
+    initialBalance: 7200.0,
+    currentBalance: 7200.0,
+    updatedAt: '2026-08-01T08:00:00Z',
+    notes: 'Saldo de fechamento de agosto',
   },
 ];

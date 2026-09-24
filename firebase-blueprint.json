@@ -85,6 +85,40 @@
         "timestamp": { "type": "string" }
       },
       "required": ["id", "title", "body", "type", "read", "timestamp"]
+    },
+    "expenses": {
+      "title": "Expenses",
+      "description": "Monthly operational expenses, bills and supplier payments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string" },
+        "paymentDate": { "type": "string" },
+        "status": { "type": "string" },
+        "month": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "description", "category", "amount", "dueDate", "status", "month"]
+    },
+    "monthly_balances": {
+      "title": "Monthly Account Balances",
+      "description": "Registered bank account balances per month for cash flow projection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "month": { "type": "string" },
+        "bankAccount": { "type": "string" },
+        "initialBalance": { "type": "number" },
+        "currentBalance": { "type": "number" },
+        "updatedAt": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "month", "bankAccount", "initialBalance"]
     }
   }
 }
