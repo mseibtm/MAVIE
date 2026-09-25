@@ -8,7 +8,7 @@ import {
   getStoredSporadicServices, saveStoredSporadicServices,
   getStoredExpenses, saveStoredExpenses,
   getStoredMonthlyBalances, saveStoredMonthlyBalances,
-  MOCK_EXPENSE_IDS, MOCK_BALANCE_IDS,
+  MOCK_SPORADIC_IDS, MOCK_EXPENSE_IDS, MOCK_BALANCE_IDS,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
   getStoredSession, saveStoredSession, touchStoredSession,
@@ -292,7 +292,14 @@ export default function App() {
       const unsubSporadic = subscribeSporadicServices((remoteSporadic) => {
         setSporadicServices((prevLocal) => {
           const localMap = new Map<string, SporadicService>(prevLocal.map((s) => [s.id, s]));
-          const mergedRemote = remoteSporadic.map((rs) => {
+          const cleanedRemote = remoteSporadic.filter((rs) => {
+            if (MOCK_SPORADIC_IDS.has(rs.id)) {
+              deleteSporadicServiceFromFirestore(rs.id);
+              return false;
+            }
+            return true;
+          });
+          const mergedRemote = cleanedRemote.map((rs) => {
             const ls = localMap.get(rs.id);
             if (ls) {
               return {

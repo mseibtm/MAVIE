@@ -67,7 +67,12 @@ const MOCK_CLIENT_IDS = new Set(['cli-1', 'cli-2', 'cli-3']);
 const MOCK_BOLETO_IDS = new Set(['bol-101', 'bol-102', 'bol-201', 'bol-301']);
 const MOCK_NFE_IDS = new Set(['nf-101', 'nf-102', 'nf-201']);
 const MOCK_TICKET_IDS = new Set(['tkt-101', 'tkt-201', 'tkt-301']);
-const MOCK_SPORADIC_IDS = new Set(['sp-101', 'sp-102', 'sp-201']);
+export const MOCK_SPORADIC_IDS = new Set([
+  'sp-101', 'sp-102', 'sp-201',
+  'sp-1788888862875', 'sp-1788888891210', 'sp-1788888944335',
+  'sp-1789646579303', 'sp-1789646635620', 'sp-1789646654112', 'sp-1789646683418',
+  'sp-1790281418737', 'sp-1790281478942', 'sp-1790281497298'
+]);
 export const MOCK_EXPENSE_IDS = new Set(['exp-1', 'exp-2', 'exp-3', 'exp-4', 'exp-5']);
 export const MOCK_BALANCE_IDS = new Set(['bal-2026-09', 'bal-2026-08']);
 
