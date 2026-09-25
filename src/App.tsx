@@ -8,6 +8,7 @@ import {
   getStoredSporadicServices, saveStoredSporadicServices,
   getStoredExpenses, saveStoredExpenses,
   getStoredMonthlyBalances, saveStoredMonthlyBalances,
+  MOCK_EXPENSE_IDS, MOCK_BALANCE_IDS,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
   getStoredSession, saveStoredSession, touchStoredSession,
@@ -50,6 +51,7 @@ import {
   saveExpenseToFirestore,
   deleteExpenseFromFirestore,
   saveMonthlyBalanceToFirestore,
+  deleteMonthlyBalanceFromFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
@@ -312,7 +314,14 @@ export default function App() {
       const unsubExpenses = subscribeExpenses((remoteExpenses) => {
         setExpenses((prevLocal) => {
           const localMap = new Map<string, Expense>(prevLocal.map((e) => [e.id, e]));
-          const mergedRemote = remoteExpenses.map((re) => {
+          const cleanedRemote = remoteExpenses.filter((re) => {
+            if (MOCK_EXPENSE_IDS.has(re.id)) {
+              deleteExpenseFromFirestore(re.id);
+              return false;
+            }
+            return true;
+          });
+          const mergedRemote = cleanedRemote.map((re) => {
             const le = localMap.get(re.id);
             if (le) {
               return {
@@ -329,10 +338,15 @@ export default function App() {
         });
       });
       const unsubBalances = subscribeMonthlyBalances((remoteBalances) => {
-        if (remoteBalances && remoteBalances.length > 0) {
-          setMonthlyBalances(remoteBalances);
-          saveStoredMonthlyBalances(remoteBalances);
-        }
+        const cleaned = (remoteBalances || []).filter((rb) => {
+          if (MOCK_BALANCE_IDS.has(rb.id) || rb.id === 'bal-2026-09' || rb.id === 'bal-2026-08') {
+            deleteMonthlyBalanceFromFirestore(rb.id);
+            return false;
+          }
+          return true;
+        });
+        setMonthlyBalances(cleaned);
+        saveStoredMonthlyBalances(cleaned);
       });
       const unsubNotifs = subscribeNotifications((nt) => {
         setNotifications((prevNotifs) => {

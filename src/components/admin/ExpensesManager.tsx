@@ -64,13 +64,11 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // Target Month
-  const currentMonthKey = new Date().toISOString().substring(0, 7);
-  const targetMonth = selectedPeriod !== 'all' ? selectedPeriod : currentMonthKey;
+  // Target Month (starts from October 2026)
+  const targetMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
 
-  // Account balance for the target month
-  const targetMonthBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth);
-  const currentBalanceRecord = targetMonthBalanceRecord || (monthlyBalances.length > 0 ? monthlyBalances[0] : null);
+  // Account balance strictly for the target month (defaults cleanly to 0 if not registered)
+  const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
   const currentAccountBalance = currentBalanceRecord
     ? (currentBalanceRecord.currentBalance !== undefined
         ? currentBalanceRecord.currentBalance

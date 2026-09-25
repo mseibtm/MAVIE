@@ -62,9 +62,8 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
 }) => {
   const [detailTab, setDetailTab] = useState<'all_entries' | 'monthly_fees' | 'sporadic_entries' | 'expenses_outflow'>('all_entries');
 
-  // Determine current active target month
-  const currentMonthKey = new Date().toISOString().substring(0, 7);
-  const targetMonth = selectedPeriod !== 'all' ? selectedPeriod : currentMonthKey;
+  // Determine current active target month (starts from October 2026)
+  const targetMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
 
   // Format month name in Portuguese
   const formatMonthTitle = (monthStr: string) => {
@@ -75,13 +74,10 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   };
 
   const validClientMap = new Map<string, Client>(clients.map((c) => [c.id, c]));
-  const activeClients = clients.filter((c) => c.status === 'active');
 
   // 1. SALDO EM CONTA BANCÁRIA
-  // Look for balance of the target month or the most recent one
-  const targetMonthBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth);
-  const fallbackBalanceRecord = monthlyBalances.length > 0 ? monthlyBalances[0] : null;
-  const currentBalanceRecord = targetMonthBalanceRecord || fallbackBalanceRecord;
+  // Look for balance strictly for the target month (defaults cleanly to 0 if not registered)
+  const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
 
   const currentAccountBalance = currentBalanceRecord
     ? (currentBalanceRecord.currentBalance !== undefined
@@ -105,14 +101,9 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   const pendingBoletosAmount = pendingBoletos.reduce((acc, b) => acc + b.amount, 0);
   const overdueBoletosAmount = overdueBoletos.reduce((acc, b) => acc + b.amount, 0);
 
-  // Active clients who don't have a boleto for this month yet (Contractual recurrent fee forecast)
-  const clientsWithBoletoInPeriod = new Set(targetBoletos.map((b) => b.clientId));
-  const activeClientsWithoutBoleto = activeClients.filter((c) => !clientsWithBoletoInPeriod.has(c.id));
-  const unbilledContractualFeeAmount = activeClientsWithoutBoleto.reduce((acc, c) => acc + (c.monthlyFee || 0), 0);
-
-  // Total Mensalidades Previstas e Realizadas
+  // Total Mensalidades Previstas e Realizadas (com base em boletos emitidos para o mês)
   const totalMensalidadesRealizadas = paidBoletosAmount;
-  const totalMensalidadesPrevistasAReceber = pendingBoletosAmount + unbilledContractualFeeAmount;
+  const totalMensalidadesPrevistasAReceber = pendingBoletosAmount;
   const totalMensalidadesGerais = totalMensalidadesRealizadas + totalMensalidadesPrevistasAReceber;
 
   // Filter Sporadic Services by target month
@@ -516,7 +507,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              Todas Entradas ({targetBoletos.length + activeClientsWithoutBoleto.length + targetSporadics.length})
+              Todas Entradas ({targetBoletos.length + targetSporadics.length})
             </button>
             <button
               onClick={() => setDetailTab('monthly_fees')}
@@ -711,42 +702,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
                     );
                   })}
 
-                {/* 2. Contratos Ativos sem boleto gerado no mês */}
-                {(detailTab === 'all_entries' || detailTab === 'monthly_fees') &&
-                  activeClientsWithoutBoleto.map((client) => (
-                    <tr key={`contract-${client.id}`} className="hover:bg-slate-850/60 transition-colors bg-emerald-950/5">
-                      <td className="p-4">
-                        <div className="font-bold text-white flex items-center gap-2">
-                          <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Mensalidade Contratual Ativa</span>
-                        </div>
-                        <span className="text-[10px] text-emerald-400/80">Recorrente previsto</span>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-semibold text-slate-200">{client.name}</div>
-                        {client.company && <div className="text-[10px] text-slate-400">{client.company}</div>}
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-800/60 text-emerald-300 text-[10px] font-bold">
-                          Contrato Ativo
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono text-slate-400">
-                        {targetMonth}-10 (Previsão)
-                      </td>
-                      <td className="p-4 font-mono font-bold text-emerald-400 text-sm">
-                        {formatCurrency(client.monthlyFee || 0)}
-                      </td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-300 border border-sky-500/20">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>A Faturar / Previsto</span>
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-
-                {/* 3. Serviços Esporádicos Previstos e Realizados do mês */}
+                {/* 2. Serviços Esporádicos Previstos e Realizados do mês */}
                 {(detailTab === 'all_entries' || detailTab === 'sporadic_entries') &&
                   targetSporadics.map((service) => {
                     const client = validClientMap.get(service.clientId);
@@ -795,15 +751,14 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
                     );
                   })}
 
-                {targetBoletos.length === 0 &&
-                  activeClientsWithoutBoleto.length === 0 &&
-                  targetSporadics.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
-                        Nenhuma entrada prevista ou faturamento registrado para este mês.
-                      </td>
-                    </tr>
-                  )}
+                {targetBoletos.length === 0 && targetSporadics.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 font-medium">
+                      Nenhum boleto ou serviço esporádico registrado para {formatMonthTitle(targetMonth)}. Receitas, resultados e saldo projetado zerados para o início da gestão financeira a partir de outubro.
+                    </td>
+                  </tr>
+                )}
+
               </tbody>
             </table>
           )}

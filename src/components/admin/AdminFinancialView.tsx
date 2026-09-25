@@ -95,8 +95,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'cashflow' | 'expenses' | 'realized' | 'mrr' | 'sporadic'>('cashflow');
 
-  // Month / Period Filter state
-  const [selectedPeriod, setSelectedPeriod] = useState<string>('all'); // 'all' or 'YYYY-MM'
+  // Month / Period Filter state (inicia a partir de Outubro/2026)
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('2026-10');
 
   // Modal State for New Sporadic Service
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -225,7 +225,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
       if (b.month) periodsSet.add(b.month);
     });
 
-    // Ensure current month is present
+    // Ensure October 2026 and current month are present
+    periodsSet.add('2026-10');
     const nowMonth = new Date().toISOString().substring(0, 7);
     periodsSet.add(nowMonth);
 

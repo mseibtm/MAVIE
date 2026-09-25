@@ -68,6 +68,8 @@ const MOCK_BOLETO_IDS = new Set(['bol-101', 'bol-102', 'bol-201', 'bol-301']);
 const MOCK_NFE_IDS = new Set(['nf-101', 'nf-102', 'nf-201']);
 const MOCK_TICKET_IDS = new Set(['tkt-101', 'tkt-201', 'tkt-301']);
 const MOCK_SPORADIC_IDS = new Set(['sp-101', 'sp-102', 'sp-201']);
+export const MOCK_EXPENSE_IDS = new Set(['exp-1', 'exp-2', 'exp-3', 'exp-4', 'exp-5']);
+export const MOCK_BALANCE_IDS = new Set(['bal-2026-09', 'bal-2026-08']);
 
 export const getStoredClients = (): Client[] => {
   const data = localStorage.getItem(KEYS.CLIENTS);
@@ -251,27 +253,30 @@ export const saveStoredAdminPassword = (password: string) => {
 
 export const getStoredExpenses = (): Expense[] => {
   const data = localStorage.getItem(KEYS.EXPENSES);
-  if (!data) return INITIAL_EXPENSES;
+  if (!data) return [];
   try {
     const list: Expense[] = JSON.parse(data);
-    return list;
+    return list.filter((e) => !MOCK_EXPENSE_IDS.has(e.id));
   } catch {
-    return INITIAL_EXPENSES;
+    return [];
   }
 };
 
 export const saveStoredExpenses = (expenses: Expense[]) => {
   try {
-    localStorage.setItem(KEYS.EXPENSES, JSON.stringify(expenses));
+    const filtered = expenses.filter((e) => !MOCK_EXPENSE_IDS.has(e.id));
+    localStorage.setItem(KEYS.EXPENSES, JSON.stringify(filtered));
   } catch (err) {
     console.warn('Error saving expenses to localStorage:', err);
     try {
-      const pruned = expenses.map((e) => ({
-        ...e,
-        receipt: e.receipt && e.receipt.dataUrl.length > 200000
-          ? { ...e.receipt, dataUrl: e.receipt.dataUrl.substring(0, 500) + '...[large_receipt_saved_locally]' }
-          : e.receipt,
-      }));
+      const pruned = expenses
+        .filter((e) => !MOCK_EXPENSE_IDS.has(e.id))
+        .map((e) => ({
+          ...e,
+          receipt: e.receipt && e.receipt.dataUrl.length > 200000
+            ? { ...e.receipt, dataUrl: e.receipt.dataUrl.substring(0, 500) + '...[large_receipt_saved_locally]' }
+            : e.receipt,
+        }));
       localStorage.setItem(KEYS.EXPENSES, JSON.stringify(pruned));
     } catch (e2) {
       console.error('Failed to save expenses even after pruning:', e2);
@@ -281,18 +286,19 @@ export const saveStoredExpenses = (expenses: Expense[]) => {
 
 export const getStoredMonthlyBalances = (): MonthlyBalance[] => {
   const data = localStorage.getItem(KEYS.MONTHLY_BALANCES);
-  if (!data) return INITIAL_MONTHLY_BALANCES;
+  if (!data) return [];
   try {
     const list: MonthlyBalance[] = JSON.parse(data);
-    return list;
+    return list.filter((b) => !MOCK_BALANCE_IDS.has(b.id));
   } catch {
-    return INITIAL_MONTHLY_BALANCES;
+    return [];
   }
 };
 
 export const saveStoredMonthlyBalances = (balances: MonthlyBalance[]) => {
   try {
-    localStorage.setItem(KEYS.MONTHLY_BALANCES, JSON.stringify(balances));
+    const filtered = balances.filter((b) => !MOCK_BALANCE_IDS.has(b.id));
+    localStorage.setItem(KEYS.MONTHLY_BALANCES, JSON.stringify(filtered));
   } catch (err) {
     console.warn('Error saving monthly balances to localStorage:', err);
   }
