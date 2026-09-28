@@ -319,7 +319,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
           </div>
 
           {/* Embedded PDF Viewer OR Visual Boleto Slip with Direct Download */}
-          {boleto.pdfFile && !boleto.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]') ? (
+          {boleto.pdfFile && !boleto.pdfFile.dataUrl.includes('[large_') ? (
             <div className="space-y-3">
               <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
                 <div className="flex items-center gap-3">

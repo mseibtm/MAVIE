@@ -5,6 +5,7 @@ export interface PDFAttachment {
   size: number;
   dataUrl: string;
   uploadedAt: string;
+  isLargeFile?: boolean;
 }
 
 export interface Client {

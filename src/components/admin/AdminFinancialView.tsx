@@ -258,7 +258,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const filteredSporadicServices = sporadicServices.filter((s) => {
     if (!validClientIds.has(s.clientId)) return false;
     if (selectedPeriod === 'all') return true;
-    return s.date && s.date.startsWith(selectedPeriod);
+    const d = s.dueDate || s.date;
+    return d && d.startsWith(selectedPeriod);
   });
 
   // Realized Revenues Calculations

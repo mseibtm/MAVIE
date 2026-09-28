@@ -244,11 +244,11 @@ export default function App() {
               updateBoletoStatusInFirestore(rb.id, 'paid', resolvedPaidAt);
             }
 
-            const resolvedPdf = (lb?.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+            const resolvedPdf = (lb?.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_'))
               ? lb.pdfFile
               : (rb.pdfFile || lb?.pdfFile);
 
-            const resolvedReceipt = (lb?.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_pdf_file_saved_locally]'))
+            const resolvedReceipt = (lb?.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_'))
               ? lb.paymentReceipt
               : (rb.paymentReceipt || lb?.paymentReceipt);
 
@@ -274,7 +274,7 @@ export default function App() {
             if (ln) {
               return {
                 ...rn,
-                pdfFile: (ln.pdfFile?.dataUrl && !ln.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]'))
+                pdfFile: (ln.pdfFile?.dataUrl && !ln.pdfFile.dataUrl.includes('[large_'))
                   ? ln.pdfFile
                   : rn.pdfFile,
               };
@@ -292,13 +292,7 @@ export default function App() {
       const unsubSporadic = subscribeSporadicServices((remoteSporadic) => {
         setSporadicServices((prevLocal) => {
           const localMap = new Map<string, SporadicService>(prevLocal.map((s) => [s.id, s]));
-          const cleanedRemote = remoteSporadic.filter((rs) => {
-            if (MOCK_SPORADIC_IDS.has(rs.id)) {
-              deleteSporadicServiceFromFirestore(rs.id);
-              return false;
-            }
-            return true;
-          });
+          const cleanedRemote = remoteSporadic.filter((rs) => !MOCK_SPORADIC_IDS.has(rs.id));
           const mergedRemote = cleanedRemote.map((rs) => {
             const ls = localMap.get(rs.id);
             if (ls) {

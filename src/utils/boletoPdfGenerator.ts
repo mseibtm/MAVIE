@@ -481,7 +481,7 @@ export async function downloadBoletoFile(
     if (
       boleto.pdfFile &&
       boleto.pdfFile.dataUrl &&
-      !boleto.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]') &&
+      !boleto.pdfFile.dataUrl.includes('[large_') &&
       (boleto.pdfFile.dataUrl.startsWith('data:') || boleto.pdfFile.dataUrl.startsWith('blob:'))
     ) {
       const filename = boleto.pdfFile.name || `Boleto_${boleto.id}.pdf`;
@@ -524,7 +524,7 @@ export function downloadSporadicServicePDF(
     if (
       service.pdfFile &&
       service.pdfFile.dataUrl &&
-      !service.pdfFile.dataUrl.includes('[large_pdf_file_saved_locally]') &&
+      !service.pdfFile.dataUrl.includes('[large_') &&
       (service.pdfFile.dataUrl.startsWith('data:') || service.pdfFile.dataUrl.startsWith('blob:'))
     ) {
       const filename = service.pdfFile.name || `Servico_${service.id}.pdf`;
