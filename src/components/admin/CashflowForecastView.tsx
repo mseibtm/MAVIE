@@ -78,12 +78,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   // 1. SALDO EM CONTA BANCÁRIA
   // Look for balance strictly for the target month (defaults cleanly to 0 if not registered)
   const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
-
-  const currentAccountBalance = currentBalanceRecord
-    ? (currentBalanceRecord.currentBalance !== undefined
-        ? currentBalanceRecord.currentBalance
-        : currentBalanceRecord.initialBalance)
-    : 0;
+  const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
 
   // 2. RECEITAS DO MÊS (MENSALIDADES + ESPORÁDICOS)
   // Filter boletos by target month
@@ -137,6 +132,9 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   const pendingExpensesAmount = pendingExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalExpensesAmount = paidExpensesAmount + pendingExpensesAmount;
 
+  // Saldo em Conta Bancária Atualizado (debita automaticamente as despesas pagas do mês - Item 1)
+  const currentAccountBalance = initialBaseBalance - paidExpensesAmount;
+
   // 4. RESULTADO LÍQUIDO / DRE OPERACIONAL
   const realizedNetResult = totalReceitasRealizadas - paidExpensesAmount;
   const projectedNetResult = totalReceitasPrevistasGerais - totalExpensesAmount;
@@ -144,8 +142,9 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
     ? ((projectedNetResult / totalReceitasPrevistasGerais) * 100).toFixed(1)
     : '0';
 
-  // 5. SALDO FINAL PROJETADO AO FIM DO MÊS
-  // Formula: Saldo Atual em Conta + Entradas Previstas a Receber - Saídas Previstas a Pagar
+  // 5. SALDO FINAL PROJETADO AO FIM DO MÊS (Item 2)
+  // Formula: Saldo Atual em Conta (já com despesas pagas debitadas) + Entradas Previstas a Receber - Saídas Previstas a Pagar (Pendentes)
+  // Equivalente: Saldo Base Informado + Entradas Previstas a Receber - Total de Despesas do Mês
   const projectedFinalBalance = currentAccountBalance + totalPrevisaoEntradasAReceber - pendingExpensesAmount;
 
   // Monthly Chart Data (comparative historical and projected)
@@ -274,12 +273,14 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
               <Edit className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="text-2xl font-black text-sky-300 font-mono">
+          <div className={`text-2xl font-black font-mono ${currentAccountBalance >= 0 ? 'text-sky-300' : 'text-rose-400'}`}>
             {formatCurrency(currentAccountBalance)}
           </div>
           <div className="text-[10px] text-slate-400 mt-2 border-t border-slate-800/80 pt-2 flex items-center justify-between">
             <span className="truncate max-w-[120px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
-            <span className="text-sky-400 font-semibold">{currentBalanceRecord?.month === targetMonth ? 'Atualizado' : 'Base'}</span>
+            <span className="text-sky-400 font-semibold">
+              {paidExpensesAmount > 0 ? `Débito de ${formatCurrency(paidExpensesAmount)}` : 'Base Informada'}
+            </span>
           </div>
         </div>
 
@@ -361,7 +362,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
             {formatCurrency(projectedFinalBalance)}
           </div>
           <div className="text-[10px] text-slate-300 mt-2 border-t border-indigo-500/20 pt-2 flex items-center justify-between">
-            <span>Saldo Atual + Entradas - Saídas</span>
+            <span>Saldo Atual + Entradas - Despesas a Pagar</span>
             <span className="text-indigo-400 font-bold font-mono">
               {projectedFinalBalance >= currentAccountBalance ? '▲' : '▼'} {formatCurrency(Math.abs(projectedFinalBalance - currentAccountBalance))}
             </span>
@@ -379,11 +380,15 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
           <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl">
-            <span className="text-slate-400 text-[11px] block">1. Saldo em Conta Base</span>
-            <span className="text-base font-black text-sky-400 font-mono block mt-1">
+            <span className="text-slate-400 text-[11px] block">1. Saldo em Conta Atual</span>
+            <span className={`text-base font-black font-mono block mt-1 ${currentAccountBalance >= 0 ? 'text-sky-400' : 'text-rose-400'}`}>
               {formatCurrency(currentAccountBalance)}
             </span>
-            <span className="text-[10px] text-slate-500 block mt-0.5">Saldo bancário informado</span>
+            <span className="text-[10px] text-slate-500 block mt-0.5">
+              {paidExpensesAmount > 0
+                ? `Base (${formatCurrency(initialBaseBalance)}) - Débito pago (${formatCurrency(paidExpensesAmount)})`
+                : 'Saldo bancário informado'}
+            </span>
           </div>
 
           <div className="p-3.5 bg-slate-950 border border-emerald-800/40 rounded-xl">
@@ -406,7 +411,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
               -{formatCurrency(pendingExpensesAmount)}
             </span>
             <span className="text-[10px] text-slate-400 block mt-0.5">
-              {pendingExpenses.length} despesa(s) pendente(s) no mês
+              {pendingExpenses.length} despesa(s) pendente(s) a pagar
             </span>
           </div>
 

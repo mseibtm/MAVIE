@@ -8,6 +8,7 @@ interface AccountBalanceModalProps {
   onSave: (balance: MonthlyBalance) => void;
   currentBalanceRecord?: MonthlyBalance | null;
   selectedMonth: string;
+  paidExpensesAmount?: number;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -17,6 +18,7 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
   onSave,
   currentBalanceRecord,
   selectedMonth,
+  paidExpensesAmount = 0,
   onToast,
 }) => {
   const [bankAccount, setBankAccount] = useState('');
@@ -27,15 +29,15 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    const targetMonth = selectedMonth !== 'all' ? selectedMonth : new Date().toISOString().substring(0, 7);
+    const targetMonth = selectedMonth !== 'all' ? selectedMonth : '2026-10';
     setMonth(targetMonth);
 
     if (currentBalanceRecord) {
       setBankAccount(currentBalanceRecord.bankAccount || 'Conta Corrente Principal PJ');
       setBalanceStr(
-        currentBalanceRecord.currentBalance !== undefined
-          ? currentBalanceRecord.currentBalance.toString()
-          : currentBalanceRecord.initialBalance.toString()
+        currentBalanceRecord.initialBalance !== undefined
+          ? currentBalanceRecord.initialBalance.toString()
+          : (currentBalanceRecord.currentBalance !== undefined ? currentBalanceRecord.currentBalance.toString() : '0')
       );
       setNotes(currentBalanceRecord.notes || '');
     } else {
@@ -56,14 +58,15 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
       return;
     }
 
-    const cleanMonth = month || new Date().toISOString().substring(0, 7);
+    const cleanMonth = month || '2026-10';
+    const paidDebit = paidExpensesAmount || 0;
 
     const record: MonthlyBalance = {
       id: currentBalanceRecord?.id || `bal-${cleanMonth}`,
       month: cleanMonth,
       bankAccount: bankAccount.trim() || 'Conta Corrente Principal PJ',
       initialBalance: parsedBalance,
-      currentBalance: parsedBalance,
+      currentBalance: parsedBalance - paidDebit,
       updatedAt: new Date().toISOString(),
       notes: notes.trim() || undefined,
     };
@@ -171,8 +174,32 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
               />
             </div>
             <p className="text-[11px] text-slate-500 mt-1">
-              Informe o saldo consolidado (pode ser positivo ou negativo).
+              Informe o saldo base de partida. Despesas marcadas como pagas no mês são debitadas automaticamente.
             </p>
+            {paidExpensesAmount > 0 && (
+              <div className="mt-2.5 p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-1.5 font-mono">
+                <div className="flex justify-between text-slate-400 font-sans">
+                  <span>Saldo Base Informado:</span>
+                  <span className="font-mono text-white font-bold">
+                    {isNaN(parseFloat(balanceStr.replace(',', '.')))
+                      ? 'R$ 0,00'
+                      : parseFloat(balanceStr.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+                <div className="flex justify-between text-rose-400 font-sans">
+                  <span>(-) Despesas Pagas no Mês:</span>
+                  <span className="font-mono font-bold">
+                    -{paidExpensesAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+                <div className="flex justify-between font-bold text-sky-400 font-sans border-t border-slate-800/80 pt-1.5">
+                  <span>(=) Saldo Atual Conciliado:</span>
+                  <span className="font-mono">
+                    {((isNaN(parseFloat(balanceStr.replace(',', '.'))) ? 0 : parseFloat(balanceStr.replace(',', '.'))) - paidExpensesAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}

@@ -67,19 +67,33 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   // Target Month (starts from October 2026)
   const targetMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
 
-  // Account balance strictly for the target month (defaults cleanly to 0 if not registered)
-  const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
-  const currentAccountBalance = currentBalanceRecord
-    ? (currentBalanceRecord.currentBalance !== undefined
-        ? currentBalanceRecord.currentBalance
-        : currentBalanceRecord.initialBalance)
-    : 0;
-
   // Filter expenses by selected period, category, status and search
   const periodExpenses = expenses.filter((e) => {
     if (selectedPeriod === 'all') return true;
     return e.month === selectedPeriod || (e.dueDate && e.dueDate.startsWith(selectedPeriod));
   });
+
+  // Calculate totals
+  const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const paidExpenses = periodExpenses.filter((e) => e.status === 'paid');
+  const pendingExpenses = periodExpenses.filter((e) => e.status === 'pending');
+
+  const totalPaid = paidExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  // Account balance strictly for the target month with automatic debit of paid expenses (Item 1)
+  const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
+  const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
+
+  // The account balance is automatically debited by all paid expenses of the month
+  const targetMonthPaidExpenses = expenses
+    .filter((e) => {
+      const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+      return m === targetMonth && e.status === 'paid';
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const currentAccountBalance = initialBaseBalance - targetMonthPaidExpenses;
 
   const filteredExpenses = periodExpenses.filter((e) => {
     if (categoryFilter !== 'all' && e.category !== categoryFilter) return false;
@@ -94,14 +108,6 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
     return true;
   });
 
-  // Calculate totals
-  const totalExpenses = periodExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const paidExpenses = periodExpenses.filter((e) => e.status === 'paid');
-  const pendingExpenses = periodExpenses.filter((e) => e.status === 'pending');
-
-  const totalPaid = paidExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
-
   const handleTogglePaid = (expense: Expense) => {
     const nextStatus = expense.status === 'paid' ? 'pending' : 'paid';
     const nowStr = new Date().toISOString().substring(0, 10);
@@ -112,7 +118,9 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
     onToast(
       'success',
       nextStatus === 'paid' ? 'Despesa Marcada como Paga' : 'Despesa Marcada como A Pagar',
-      `"${expense.description}" agora está com status ${nextStatus === 'paid' ? 'Pago' : 'Pendente'}.`
+      nextStatus === 'paid'
+        ? `"${expense.description}" paga e debitada automaticamente do saldo em conta (${formatCurrency(expense.amount)}).`
+        : `"${expense.description}" retornada para pendente e estornada no saldo em conta.`
     );
   };
 
@@ -174,12 +182,14 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
               <Edit className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="text-2xl font-black text-white font-mono">
+          <div className={`text-2xl font-black font-mono ${currentAccountBalance >= 0 ? 'text-white' : 'text-rose-400'}`}>
             {formatCurrency(currentAccountBalance)}
           </div>
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span className="truncate max-w-[150px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
-            <span className="text-sky-400 font-semibold">{currentBalanceRecord?.month === targetMonth ? 'Conciliado' : 'Base'}</span>
+            <span className="text-sky-400 font-semibold">
+              {targetMonthPaidExpenses > 0 ? `Débito: -${formatCurrency(targetMonthPaidExpenses)}` : (currentBalanceRecord?.month === targetMonth ? 'Conciliado' : 'Base')}
+            </span>
           </div>
         </div>
 

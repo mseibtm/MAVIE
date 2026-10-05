@@ -1483,20 +1483,31 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
       />
 
       {/* Account Balance Modal (Saldo em Conta Bancária) */}
-      <AccountBalanceModal
-        isOpen={isBalanceModalOpen}
-        onClose={() => setIsBalanceModalOpen(false)}
-        onSave={(balance) => {
-          if (onSaveMonthlyBalance) onSaveMonthlyBalance(balance);
-        }}
-        currentBalanceRecord={
-          monthlyBalances.find(
-            (b) => b.month === (selectedPeriod !== 'all' ? selectedPeriod : new Date().toISOString().substring(0, 7))
-          ) || (monthlyBalances.length > 0 ? monthlyBalances[0] : null)
-        }
-        selectedMonth={selectedPeriod !== 'all' ? selectedPeriod : new Date().toISOString().substring(0, 7)}
-        onToast={onToast}
-      />
+      {(() => {
+        const targetBalanceMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
+        const targetPaidExpensesAmount = expenses
+          .filter((e) => {
+            const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+            return m === targetBalanceMonth && e.status === 'paid';
+          })
+          .reduce((sum, e) => sum + e.amount, 0);
+
+        return (
+          <AccountBalanceModal
+            isOpen={isBalanceModalOpen}
+            onClose={() => setIsBalanceModalOpen(false)}
+            onSave={(balance) => {
+              if (onSaveMonthlyBalance) onSaveMonthlyBalance(balance);
+            }}
+            currentBalanceRecord={
+              monthlyBalances.find((b) => b.month === targetBalanceMonth) || null
+            }
+            selectedMonth={targetBalanceMonth}
+            paidExpensesAmount={targetPaidExpensesAmount}
+            onToast={onToast}
+          />
+        );
+      })()}
     </div>
   );
 };

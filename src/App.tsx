@@ -140,6 +140,54 @@ export default function App() {
     }
   }, [clients, session]);
 
+  // Helper to automatically sync and debit paid expenses from monthly account balances
+  const syncMonthlyBalancesWithExpenses = (
+    currentExpenses: Expense[],
+    currentBalances: MonthlyBalance[]
+  ): MonthlyBalance[] => {
+    // Map of month -> total paid expenses
+    const paidByMonth = new Map<string, number>();
+    currentExpenses.forEach((e) => {
+      if (e.status === 'paid') {
+        const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+        if (m) {
+          paidByMonth.set(m, (paidByMonth.get(m) || 0) + e.amount);
+        }
+      }
+    });
+
+    const existingMonths = new Set<string>();
+    const updated = currentBalances.map((b) => {
+      existingMonths.add(b.month);
+      const paid = paidByMonth.get(b.month) || 0;
+      const newCurrent = b.initialBalance - paid;
+      if (b.currentBalance !== newCurrent) {
+        const updatedRecord = { ...b, currentBalance: newCurrent, updatedAt: new Date().toISOString() };
+        saveMonthlyBalanceToFirestore(updatedRecord);
+        return updatedRecord;
+      }
+      return b;
+    });
+
+    // If there are paid expenses in a month without a monthly balance record yet, initialize one
+    paidByMonth.forEach((paid, m) => {
+      if (!existingMonths.has(m) && paid > 0) {
+        const newRecord: MonthlyBalance = {
+          id: `bal-${m}`,
+          month: m,
+          bankAccount: 'Conta Corrente Principal PJ',
+          initialBalance: 0,
+          currentBalance: -paid,
+          updatedAt: new Date().toISOString(),
+        };
+        updated.push(newRecord);
+        saveMonthlyBalanceToFirestore(newRecord);
+      }
+    });
+
+    return updated;
+  };
+
   // Load stored data on mount & subscribe to Firestore
   useEffect(() => {
     // 1. Initial local load
@@ -335,6 +383,11 @@ export default function App() {
             return re;
           });
           saveStoredExpenses(mergedRemote);
+          setMonthlyBalances((prevBalances) => {
+            const synced = syncMonthlyBalancesWithExpenses(mergedRemote, prevBalances);
+            saveStoredMonthlyBalances(synced);
+            return synced;
+          });
           return mergedRemote;
         });
       });
@@ -346,8 +399,11 @@ export default function App() {
           }
           return true;
         });
-        setMonthlyBalances(cleaned);
-        saveStoredMonthlyBalances(cleaned);
+        setMonthlyBalances((prevBalances) => {
+          const synced = syncMonthlyBalancesWithExpenses(expenses, cleaned);
+          saveStoredMonthlyBalances(synced);
+          return synced;
+        });
       });
       const unsubNotifs = subscribeNotifications((nt) => {
         setNotifications((prevNotifs) => {
@@ -967,6 +1023,12 @@ export default function App() {
     setExpenses(updated);
     saveStoredExpenses(updated);
     saveExpenseToFirestore(newExpense);
+
+    // Automatically debit from account balance if marked as paid
+    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    setMonthlyBalances(updatedBalances);
+    saveStoredMonthlyBalances(updatedBalances);
+
     addToast('success', 'Despesa Lançada', `A despesa "${newExpense.description}" foi registrada.`);
   };
 
@@ -984,6 +1046,12 @@ export default function App() {
     if (updatedItem) {
       saveExpenseToFirestore(updatedItem);
     }
+
+    // Automatically debit/credit account balance when expense status, month, or amount changes
+    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    setMonthlyBalances(updatedBalances);
+    saveStoredMonthlyBalances(updatedBalances);
+
     addToast('success', 'Despesa Atualizada', 'Alterações salvas com sucesso.');
   };
 
@@ -992,23 +1060,43 @@ export default function App() {
     setExpenses(updated);
     saveStoredExpenses(updated);
     deleteExpenseFromFirestore(id);
+
+    // Automatically reconcile account balance after expense deletion
+    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    setMonthlyBalances(updatedBalances);
+    saveStoredMonthlyBalances(updatedBalances);
+
     addToast('info', 'Despesa Removida', 'A despesa foi removida dos registros.');
   };
 
   // Monthly Balance Handlers
   const handleSaveMonthlyBalance = (balance: MonthlyBalance) => {
+    // Calculate currentBalance dynamically based on total paid expenses in that month
+    const paidInMonth = expenses
+      .filter((e) => {
+        const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+        return m === balance.month && e.status === 'paid';
+      })
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const consolidatedBalance: MonthlyBalance = {
+      ...balance,
+      currentBalance: balance.initialBalance - paidInMonth,
+      updatedAt: new Date().toISOString(),
+    };
+
     let exists = false;
     const updated = monthlyBalances.map((b) => {
-      if (b.month === balance.month) {
+      if (b.month === consolidatedBalance.month) {
         exists = true;
-        return balance;
+        return consolidatedBalance;
       }
       return b;
     });
-    const finalBalances = exists ? updated : [balance, ...updated];
+    const finalBalances = exists ? updated : [consolidatedBalance, ...updated];
     setMonthlyBalances(finalBalances);
     saveStoredMonthlyBalances(finalBalances);
-    saveMonthlyBalanceToFirestore(balance);
+    saveMonthlyBalanceToFirestore(consolidatedBalance);
   };
 
   // Tickets CRUD
