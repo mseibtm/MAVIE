@@ -98,44 +98,7 @@ export const INITIAL_BOLETOS: Boleto[] = [
   },
 ];
 
-export const INITIAL_NFES: NotaFiscal[] = [
-  {
-    id: 'nf-101',
-    clientId: 'cli-1',
-    number: '000.004.892',
-    series: '1',
-    issueDate: '2026-07-15',
-    amount: 1450.00,
-    description: 'Prestação de serviços de tecnologia da informação, hospedagem em nuvem e suporte técnico especializado.',
-    accessKey: generateNFeAccessKey(),
-    status: 'issued',
-    createdAt: '2026-07-15T12:00:00Z',
-  },
-  {
-    id: 'nf-102',
-    clientId: 'cli-1',
-    number: '000.004.510',
-    series: '1',
-    issueDate: '2026-06-15',
-    amount: 1450.00,
-    description: 'Prestação de serviços de tecnologia da informação e manutenção preventiva de sistemas.',
-    accessKey: generateNFeAccessKey(),
-    status: 'issued',
-    createdAt: '2026-06-15T12:00:00Z',
-  },
-  {
-    id: 'nf-201',
-    clientId: 'cli-2',
-    number: '000.004.901',
-    series: '1',
-    issueDate: '2026-07-20',
-    amount: 2800.00,
-    description: 'Serviços de consultoria em marketing digital, gestão de tráfego e análise de métricas.',
-    accessKey: generateNFeAccessKey(),
-    status: 'issued',
-    createdAt: '2026-07-20T16:00:00Z',
-  },
-];
+export const INITIAL_NFES: NotaFiscal[] = [];
 
 export const INITIAL_TICKETS: SupportTicket[] = [
   {
