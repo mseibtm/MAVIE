@@ -541,11 +541,17 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
             return (
               <div
                 key={boleto.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm hover:border-slate-700 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                className={`bg-slate-900 border rounded-2xl p-4 sm:p-5 shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                  isDueOverdue
+                    ? 'border-rose-800/80 bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 shadow-rose-950/30 hover:border-rose-700'
+                    : 'border-slate-800 hover:border-slate-700'
+                }`}
               >
                 <div className="space-y-2 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono text-slate-400 font-bold">#{boleto.id}</span>
+                    <span className={`text-xs font-mono font-bold ${isDueOverdue ? 'text-rose-400' : 'text-slate-400'}`}>
+                      #{boleto.id}
+                    </span>
                     <AnimatePresence mode="wait">
                       <motion.span
                         key={boleto.status}
@@ -570,7 +576,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                       </motion.span>
                     </AnimatePresence>
 
-                    <span className="text-xs font-bold text-amber-400">
+                    <span className={`text-xs font-bold ${isDueOverdue ? 'text-rose-300' : 'text-amber-400'}`}>
                       Cliente: {client ? `${client.name} (${client.cpf})` : 'Cliente'}
                     </span>
 
@@ -605,22 +611,24 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                     )}
                   </div>
 
-                  <h4 className="text-sm font-bold text-white">{boleto.description}</h4>
+                  <h4 className={`text-sm font-bold ${isDueOverdue ? 'text-rose-400 font-extrabold' : 'text-white'}`}>
+                    {boleto.description}
+                  </h4>
 
                   <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
                     <span>
                       Emissão:{' '}
-                      <strong className="text-amber-300 font-semibold">
+                      <strong className={`font-semibold ${isDueOverdue ? 'text-rose-300/80' : 'text-amber-300'}`}>
                         {new Date(boleto.createdAt).toLocaleDateString('pt-BR')}
                       </strong>
                     </span>
 
                     {/* Due date with interactive edit button */}
                     <span className="inline-flex items-center gap-1.5">
-                      Vencimento:{' '}
+                      <span className={isDueOverdue ? 'text-rose-400 font-medium' : ''}>Vencimento:</span>{' '}
                       <strong
                         className={`font-bold ${
-                          isDueOverdue ? 'text-rose-400' : 'text-slate-200'
+                          isDueOverdue ? 'text-rose-400 font-black' : 'text-slate-200'
                         }`}
                       >
                         {formattedDueDate}
@@ -628,16 +636,23 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenDueDateModal(boleto)}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-lg transition-all"
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-lg transition-all ${
+                          isDueOverdue
+                            ? 'bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800'
+                            : 'bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
+                        }`}
                         title="Alterar Data de Vencimento"
                       >
-                        <Calendar className="w-3 h-3 text-amber-400" />
+                        <Calendar className={`w-3 h-3 ${isDueOverdue ? 'text-rose-400' : 'text-amber-400'}`} />
                         <span>Alterar Vencimento</span>
                       </button>
                     </span>
 
                     <span>
-                      Valor: <strong className="text-white font-bold">{formatCurrency(boleto.amount)}</strong>
+                      <span className={isDueOverdue ? 'text-rose-400 font-medium' : ''}>Valor:</span>{' '}
+                      <strong className={`font-black ${isDueOverdue ? 'text-rose-400' : 'text-white'}`}>
+                        {formatCurrency(boleto.amount)}
+                      </strong>
                     </span>
                   </div>
                 </div>

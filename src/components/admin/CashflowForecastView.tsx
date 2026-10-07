@@ -666,38 +666,43 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
                 {(detailTab === 'all_entries' || detailTab === 'monthly_fees') &&
                   targetBoletos.map((boleto) => {
                     const client = validClientMap.get(boleto.clientId);
+                    const isPaid = isBoletoPaid(boleto);
+                    const now = new Date();
+                    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const isOverdue = !isPaid && (boleto.status === 'overdue' || boleto.dueDate < todayStr);
+
                     return (
-                      <tr key={`bol-${boleto.id}`} className="hover:bg-slate-850/60 transition-colors">
+                      <tr key={`bol-${boleto.id}`} className={`transition-colors ${isOverdue ? 'bg-rose-950/20 hover:bg-rose-950/35' : 'hover:bg-slate-850/60'}`}>
                         <td className="p-4">
-                          <div className="font-bold text-white flex items-center gap-2">
-                            <Receipt className="w-3.5 h-3.5 text-sky-400" />
+                          <div className={`font-bold flex items-center gap-2 ${isOverdue ? 'text-rose-400 font-extrabold' : 'text-white'}`}>
+                            <Receipt className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-400' : 'text-sky-400'}`} />
                             <span>{boleto.description || 'Mensalidade Contratual'}</span>
                           </div>
-                          <span className="text-[10px] text-slate-500 font-mono">Boleto #{boleto.id}</span>
+                          <span className={`text-[10px] font-mono ${isOverdue ? 'text-rose-400/80 font-bold' : 'text-slate-500'}`}>Boleto #{boleto.id}</span>
                         </td>
                         <td className="p-4">
-                          <div className="font-semibold text-slate-200">{client?.name || 'Cliente'}</div>
-                          {client?.company && <div className="text-[10px] text-slate-400">{client.company}</div>}
+                          <div className={`font-semibold ${isOverdue ? 'text-rose-300' : 'text-slate-200'}`}>{client?.name || 'Cliente'}</div>
+                          {client?.company && <div className={`text-[10px] ${isOverdue ? 'text-rose-400/80' : 'text-slate-400'}`}>{client.company}</div>}
                         </td>
                         <td className="p-4">
-                          <span className="px-2 py-0.5 rounded-full bg-sky-950/80 border border-sky-800/60 text-sky-300 text-[10px] font-bold">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isOverdue ? 'bg-rose-950/80 border border-rose-800/80 text-rose-300' : 'bg-sky-950/80 border border-sky-800/60 text-sky-300'}`}>
                             Mensalidade Boleto
                           </span>
                         </td>
-                        <td className="p-4 font-mono text-slate-300">
+                        <td className={`p-4 font-mono font-bold ${isOverdue ? 'text-rose-400' : 'text-slate-300'}`}>
                           {boleto.dueDate}
                         </td>
-                        <td className="p-4 font-mono font-bold text-emerald-400 text-sm">
+                        <td className={`p-4 font-mono font-bold text-sm ${isOverdue ? 'text-rose-400' : 'text-emerald-400'}`}>
                           {formatCurrency(boleto.amount)}
                         </td>
                         <td className="p-4">
-                          {boleto.status === 'paid' ? (
+                          {isPaid ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                               <CheckCircle2 className="w-3.5 h-3.5" />
                               <span>Quitado</span>
                             </span>
-                          ) : boleto.status === 'overdue' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                          ) : isOverdue ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 animate-pulse">
                               <AlertCircle className="w-3.5 h-3.5" />
                               <span>Vencido</span>
                             </span>

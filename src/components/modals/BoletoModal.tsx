@@ -285,9 +285,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                     {onRemoveReceipt && (
                       <button
                         onClick={() => {
-                          if (window.confirm('Deseja realmente remover o comprovante de pagamento deste boleto?')) {
-                            onRemoveReceipt(boleto.id);
-                          }
+                          onRemoveReceipt(boleto.id);
                         }}
                         className="p-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg transition-colors cursor-pointer"
                         title="Remover Comprovante"
@@ -414,16 +412,20 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                     <span className="text-[11px] text-slate-500">{docLabel}: {client ? formatCPF(client.cpf) : '-'}</span>
                   </div>
 
-                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg">
+                  <div className={`p-2.5 ${isOverdue ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-400' : 'bg-rose-50 border-rose-200'} border rounded-lg`}>
                     <span className="text-[10px] text-rose-600 font-bold uppercase block">Vencimento</span>
                     <span className="font-black text-rose-700 text-sm">{formattedDueDate}</span>
-                    <span className="text-[10px] text-rose-500 block">Aceitar até o vencimento</span>
+                    <span className="text-[10px] text-rose-500 font-semibold block">
+                      {isOverdue ? 'Título Vencido' : 'Aceitar até o vencimento'}
+                    </span>
                   </div>
 
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                    <span className="text-[10px] text-emerald-600 font-bold uppercase block">Valor do Documento</span>
-                    <span className="font-black text-emerald-700 text-sm">{formattedAmount}</span>
-                    <span className="text-[10px] text-emerald-600 block">Desconto / Mora sob condições</span>
+                  <div className={`p-2.5 ${isOverdue ? 'bg-rose-50 border-rose-300 ring-1 ring-rose-400' : 'bg-emerald-50 border-emerald-200'} border rounded-lg`}>
+                    <span className={`text-[10px] ${isOverdue ? 'text-rose-600 font-bold' : 'text-emerald-600 font-bold'} uppercase block`}>Valor do Documento</span>
+                    <span className={`font-black ${isOverdue ? 'text-rose-600' : 'text-emerald-700'} text-sm`}>{formattedAmount}</span>
+                    <span className={`text-[10px] ${isOverdue ? 'text-rose-500 font-semibold' : 'text-emerald-600'} block`}>
+                      {isOverdue ? 'Cobrança em atraso' : 'Desconto / Mora sob condições'}
+                    </span>
                   </div>
                 </div>
 
