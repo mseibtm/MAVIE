@@ -9,6 +9,7 @@ interface AccountBalanceModalProps {
   currentBalanceRecord?: MonthlyBalance | null;
   selectedMonth: string;
   paidExpensesAmount?: number;
+  paidInflowAmount?: number;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -19,6 +20,7 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
   currentBalanceRecord,
   selectedMonth,
   paidExpensesAmount = 0,
+  paidInflowAmount = 0,
   onToast,
 }) => {
   const [bankAccount, setBankAccount] = useState('');
@@ -60,13 +62,14 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
 
     const cleanMonth = month || '2026-10';
     const paidDebit = paidExpensesAmount || 0;
+    const paidCredit = paidInflowAmount || 0;
 
     const record: MonthlyBalance = {
       id: currentBalanceRecord?.id || `bal-${cleanMonth}`,
       month: cleanMonth,
       bankAccount: bankAccount.trim() || 'Conta Corrente Principal PJ',
       initialBalance: parsedBalance,
-      currentBalance: parsedBalance - paidDebit,
+      currentBalance: parsedBalance + paidCredit - paidDebit,
       updatedAt: new Date().toISOString(),
       notes: notes.trim() || undefined,
     };
@@ -102,7 +105,7 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -113,7 +116,7 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
           <div className="p-3 bg-sky-950/30 border border-sky-800/40 rounded-xl flex items-start gap-2.5 text-xs text-sky-300">
             <Info className="w-4 h-4 shrink-0 text-sky-400 mt-0.5" />
             <span>
-              O saldo em conta é utilizado como base inicial para a <strong>Previsão de Saldo Final</strong> do mês, somando as receitas previstas e subtraindo as despesas.
+              O saldo em conta é utilizado como base inicial para a <strong>Previsão de Saldo Final</strong> do mês, somando as entradas de boletos quitados e subtraindo as despesas pagas.
             </span>
           </div>
 
@@ -157,7 +160,7 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
               <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Saldo em Conta Bancária (R$) *</span>
+              <span>Saldo Base de Partida (R$) *</span>
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-mono">
@@ -174,9 +177,9 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
               />
             </div>
             <p className="text-[11px] text-slate-500 mt-1">
-              Informe o saldo base de partida. Despesas marcadas como pagas no mês são debitadas automaticamente.
+              Informe o saldo base da conta. Boletos marcados como pagos acrescem o saldo e despesas pagas são debitadas automaticamente.
             </p>
-            {paidExpensesAmount > 0 && (
+            {(paidInflowAmount > 0 || paidExpensesAmount > 0) && (
               <div className="mt-2.5 p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-1.5 font-mono">
                 <div className="flex justify-between text-slate-400 font-sans">
                   <span>Saldo Base Informado:</span>
@@ -186,16 +189,26 @@ export const AccountBalanceModal: React.FC<AccountBalanceModalProps> = ({
                       : parseFloat(balanceStr.replace(',', '.')).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
                 </div>
-                <div className="flex justify-between text-rose-400 font-sans">
-                  <span>(-) Despesas Pagas no Mês:</span>
-                  <span className="font-mono font-bold">
-                    -{paidExpensesAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>
-                </div>
+                {paidInflowAmount > 0 && (
+                  <div className="flex justify-between text-emerald-400 font-sans">
+                    <span>(+) Entradas de Boletos/Serviços Quitados:</span>
+                    <span className="font-mono font-bold">
+                      +{paidInflowAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                )}
+                {paidExpensesAmount > 0 && (
+                  <div className="flex justify-between text-rose-400 font-sans">
+                    <span>(-) Despesas Pagas no Mês:</span>
+                    <span className="font-mono font-bold">
+                      -{paidExpensesAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-sky-400 font-sans border-t border-slate-800/80 pt-1.5">
                   <span>(=) Saldo Atual Conciliado:</span>
                   <span className="font-mono">
-                    {((isNaN(parseFloat(balanceStr.replace(',', '.'))) ? 0 : parseFloat(balanceStr.replace(',', '.'))) - paidExpensesAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {((isNaN(parseFloat(balanceStr.replace(',', '.'))) ? 0 : parseFloat(balanceStr.replace(',', '.'))) + (paidInflowAmount || 0) - (paidExpensesAmount || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
                 </div>
               </div>

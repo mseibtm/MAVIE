@@ -140,27 +140,53 @@ export default function App() {
     }
   }, [clients, session]);
 
-  // Helper to automatically sync and debit paid expenses from monthly account balances
-  const syncMonthlyBalancesWithExpenses = (
+  // Helper to automatically sync monthly account balances with paid inflows (boletos & sporadic services) and paid expenses
+  const syncMonthlyBalances = (
     currentExpenses: Expense[],
-    currentBalances: MonthlyBalance[]
+    currentBoletos: Boleto[],
+    currentBalances: MonthlyBalance[],
+    currentSporadics: SporadicService[] = []
   ): MonthlyBalance[] => {
     // Map of month -> total paid expenses
-    const paidByMonth = new Map<string, number>();
+    const paidExpensesByMonth = new Map<string, number>();
     currentExpenses.forEach((e) => {
       if (e.status === 'paid') {
         const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
         if (m) {
-          paidByMonth.set(m, (paidByMonth.get(m) || 0) + e.amount);
+          paidExpensesByMonth.set(m, (paidExpensesByMonth.get(m) || 0) + e.amount);
         }
       }
     });
 
-    const existingMonths = new Set<string>();
+    // Map of month -> total paid boletos & realized sporadic services (Entradas)
+    const paidInflowByMonth = new Map<string, number>();
+    currentBoletos.forEach((b) => {
+      const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+      if (isPaid) {
+        const m = (b.dueDate || b.paidAt || b.createdAt)?.substring(0, 7);
+        if (m) {
+          paidInflowByMonth.set(m, (paidInflowByMonth.get(m) || 0) + b.amount);
+        }
+      }
+    });
+    currentSporadics.forEach((s) => {
+      if (s.status === 'realized') {
+        const m = (s.dueDate || s.date)?.substring(0, 7);
+        if (m) {
+          paidInflowByMonth.set(m, (paidInflowByMonth.get(m) || 0) + s.amount);
+        }
+      }
+    });
+
+    const allMonths = new Set<string>();
+    currentBalances.forEach((b) => allMonths.add(b.month));
+    paidExpensesByMonth.forEach((_, m) => allMonths.add(m));
+    paidInflowByMonth.forEach((_, m) => allMonths.add(m));
+
     const updated = currentBalances.map((b) => {
-      existingMonths.add(b.month);
-      const paid = paidByMonth.get(b.month) || 0;
-      const newCurrent = b.initialBalance - paid;
+      const expensesPaid = paidExpensesByMonth.get(b.month) || 0;
+      const inflowPaid = paidInflowByMonth.get(b.month) || 0;
+      const newCurrent = b.initialBalance + inflowPaid - expensesPaid;
       if (b.currentBalance !== newCurrent) {
         const updatedRecord = { ...b, currentBalance: newCurrent, updatedAt: new Date().toISOString() };
         saveMonthlyBalanceToFirestore(updatedRecord);
@@ -169,19 +195,24 @@ export default function App() {
       return b;
     });
 
-    // If there are paid expenses in a month without a monthly balance record yet, initialize one
-    paidByMonth.forEach((paid, m) => {
-      if (!existingMonths.has(m) && paid > 0) {
-        const newRecord: MonthlyBalance = {
-          id: `bal-${m}`,
-          month: m,
-          bankAccount: 'Conta Corrente Principal PJ',
-          initialBalance: 0,
-          currentBalance: -paid,
-          updatedAt: new Date().toISOString(),
-        };
-        updated.push(newRecord);
-        saveMonthlyBalanceToFirestore(newRecord);
+    // If there are paid boletos or paid expenses in a month without a monthly balance record yet, initialize one
+    const existingMonthSet = new Set(updated.map((b) => b.month));
+    allMonths.forEach((m) => {
+      if (!existingMonthSet.has(m)) {
+        const expensesPaid = paidExpensesByMonth.get(m) || 0;
+        const inflowPaid = paidInflowByMonth.get(m) || 0;
+        if (expensesPaid > 0 || inflowPaid > 0) {
+          const newRecord: MonthlyBalance = {
+            id: `bal-${m}`,
+            month: m,
+            bankAccount: 'Conta Corrente Principal PJ',
+            initialBalance: 0,
+            currentBalance: inflowPaid - expensesPaid,
+            updatedAt: new Date().toISOString(),
+          };
+          updated.push(newRecord);
+          saveMonthlyBalanceToFirestore(newRecord);
+        }
       }
     });
 
@@ -198,9 +229,14 @@ export default function App() {
     setBoletos(syncedBoletos);
     setNfes(getStoredNFes());
     setTickets(getStoredTickets());
-    setSporadicServices(getStoredSporadicServices());
-    setExpenses(getStoredExpenses());
-    setMonthlyBalances(getStoredMonthlyBalances());
+    const loadedSporadics = getStoredSporadicServices();
+    const loadedExpenses = getStoredExpenses();
+    const loadedBalances = getStoredMonthlyBalances();
+    const syncedInitialBalances = syncMonthlyBalances(loadedExpenses, syncedBoletos, loadedBalances, loadedSporadics);
+    setSporadicServices(loadedSporadics);
+    setExpenses(loadedExpenses);
+    setMonthlyBalances(syncedInitialBalances);
+    saveStoredMonthlyBalances(syncedInitialBalances);
     setAdminPassword(getStoredAdminPassword());
     
     // Check due dates and load notifications
@@ -311,6 +347,11 @@ export default function App() {
 
           const syncedRemote = syncAndSaveBoletoStatuses(mergedRemote);
           saveStoredBoletos(syncedRemote);
+          setMonthlyBalances((prevBalances) => {
+            const synced = syncMonthlyBalances(expenses, syncedRemote, prevBalances, sporadicServices);
+            saveStoredMonthlyBalances(synced);
+            return synced;
+          });
           return syncedRemote;
         });
       });
@@ -357,6 +398,11 @@ export default function App() {
             return rs;
           });
           saveStoredSporadicServices(mergedRemote);
+          setMonthlyBalances((prevBalances) => {
+            const synced = syncMonthlyBalances(expenses, boletos, prevBalances, mergedRemote);
+            saveStoredMonthlyBalances(synced);
+            return synced;
+          });
           return mergedRemote;
         });
       });
@@ -384,7 +430,7 @@ export default function App() {
           });
           saveStoredExpenses(mergedRemote);
           setMonthlyBalances((prevBalances) => {
-            const synced = syncMonthlyBalancesWithExpenses(mergedRemote, prevBalances);
+            const synced = syncMonthlyBalances(mergedRemote, boletos, prevBalances, sporadicServices);
             saveStoredMonthlyBalances(synced);
             return synced;
           });
@@ -400,7 +446,7 @@ export default function App() {
           return true;
         });
         setMonthlyBalances((prevBalances) => {
-          const synced = syncMonthlyBalancesWithExpenses(expenses, cleaned);
+          const synced = syncMonthlyBalances(expenses, boletos, cleaned, sporadicServices);
           saveStoredMonthlyBalances(synced);
           return synced;
         });
@@ -487,6 +533,13 @@ export default function App() {
       saveStoredSporadicServices(updated);
       const item = updated.find((s) => s.id === id);
       if (item) saveSporadicServiceToFirestore(item);
+
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, boletos, prevBalances, updated);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
+
       return updated;
     });
   };
@@ -704,6 +757,13 @@ export default function App() {
     setBoletos((prev) => {
       const updated = syncAndSaveBoletoStatuses([newBoleto, ...prev]);
       saveStoredBoletos(updated);
+      if (newBoleto.status === 'paid') {
+        setMonthlyBalances((prevBalances) => {
+          const syncedBalances = syncMonthlyBalances(expenses, updated, prevBalances, sporadicServices);
+          saveStoredMonthlyBalances(syncedBalances);
+          return syncedBalances;
+        });
+      }
       return updated;
     });
     saveBoletoToFirestore(newBoleto);
@@ -857,6 +917,14 @@ export default function App() {
       if (updatedBoleto) {
         saveBoletoToFirestore(updatedBoleto);
       }
+
+      // Automatically accrue/reconcile account balance when a boleto status changes to/from paid
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, updated, prevBalances, sporadicServices);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
+
       return updated;
     });
   };
@@ -929,6 +997,15 @@ export default function App() {
       if (updatedBoleto) {
         saveBoletoToFirestore(updatedBoleto);
       }
+
+      if (shouldMarkPaid) {
+        setMonthlyBalances((prevBalances) => {
+          const syncedBalances = syncMonthlyBalances(expenses, updated, prevBalances, sporadicServices);
+          saveStoredMonthlyBalances(syncedBalances);
+          return syncedBalances;
+        });
+      }
+
       return updated;
     });
 
@@ -969,6 +1046,11 @@ export default function App() {
         return b;
       });
       saveStoredBoletos(updated);
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, updated, prevBalances, sporadicServices);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
       return updated;
     });
 
@@ -979,6 +1061,13 @@ export default function App() {
     setBoletos((prev) => {
       const updated = prev.filter((b) => b.id !== boletoId);
       saveStoredBoletos(updated);
+
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, updated, prevBalances, sporadicServices);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
+
       return updated;
     });
     deleteBoletoFromFirestore(boletoId);
@@ -1025,7 +1114,7 @@ export default function App() {
     saveExpenseToFirestore(newExpense);
 
     // Automatically debit from account balance if marked as paid
-    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    const updatedBalances = syncMonthlyBalances(updated, boletos, monthlyBalances, sporadicServices);
     setMonthlyBalances(updatedBalances);
     saveStoredMonthlyBalances(updatedBalances);
 
@@ -1048,7 +1137,7 @@ export default function App() {
     }
 
     // Automatically debit/credit account balance when expense status, month, or amount changes
-    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    const updatedBalances = syncMonthlyBalances(updated, boletos, monthlyBalances, sporadicServices);
     setMonthlyBalances(updatedBalances);
     saveStoredMonthlyBalances(updatedBalances);
 
@@ -1062,7 +1151,7 @@ export default function App() {
     deleteExpenseFromFirestore(id);
 
     // Automatically reconcile account balance after expense deletion
-    const updatedBalances = syncMonthlyBalancesWithExpenses(updated, monthlyBalances);
+    const updatedBalances = syncMonthlyBalances(updated, boletos, monthlyBalances, sporadicServices);
     setMonthlyBalances(updatedBalances);
     saveStoredMonthlyBalances(updatedBalances);
 
@@ -1071,17 +1160,30 @@ export default function App() {
 
   // Monthly Balance Handlers
   const handleSaveMonthlyBalance = (balance: MonthlyBalance) => {
-    // Calculate currentBalance dynamically based on total paid expenses in that month
-    const paidInMonth = expenses
+    // Calculate currentBalance dynamically based on total paid inflow and paid expenses in that month
+    const paidExpensesInMonth = expenses
       .filter((e) => {
         const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
         return m === balance.month && e.status === 'paid';
       })
       .reduce((sum, e) => sum + e.amount, 0);
 
+    const paidInflowInMonth = boletos
+      .filter((b) => {
+        const m = (b.dueDate || b.paidAt || b.createdAt)?.substring(0, 7);
+        return m === balance.month && b.status === 'paid';
+      })
+      .reduce((sum, b) => sum + b.amount, 0) +
+      sporadicServices
+        .filter((s) => {
+          const m = (s.dueDate || s.date)?.substring(0, 7);
+          return m === balance.month && s.status === 'realized';
+        })
+        .reduce((sum, s) => sum + s.amount, 0);
+
     const consolidatedBalance: MonthlyBalance = {
       ...balance,
-      currentBalance: balance.initialBalance - paidInMonth,
+      currentBalance: balance.initialBalance + paidInflowInMonth - paidExpensesInMonth,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1346,6 +1448,8 @@ export default function App() {
               <AdminBoletosView
                 clients={clients}
                 boletos={boletos}
+                monthlyBalances={monthlyBalances}
+                expenses={expenses}
                 initialSelectedClientId={adminClientFilter}
                 onAddBoleto={handleAddBoleto}
                 onAddSporadicService={handleAddSporadicService}
@@ -1355,6 +1459,7 @@ export default function App() {
                 onRemoveReceipt={handleRemoveBoletoReceipt}
                 onDeleteBoleto={handleDeleteBoleto}
                 onToast={addToast}
+                onNavigateToFinancial={() => setActiveTab('admin-financial')}
               />
             )}
 

@@ -263,8 +263,11 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   });
 
   // Realized Revenues Calculations
+  const isBoletoPaid = (b: Boleto) =>
+    b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+
   const realizedBoletosAmount = filteredBoletos
-    .filter((b) => b.status === 'paid')
+    .filter((b) => isBoletoPaid(b))
     .reduce((acc, b) => acc + b.amount, 0);
 
   const realizedSporadicAmount = filteredSporadicServices
@@ -499,6 +502,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         <ExpensesManager
           expenses={expenses}
           monthlyBalances={monthlyBalances}
+          boletos={boletos}
+          sporadicServices={sporadicServices}
           selectedPeriod={selectedPeriod}
           onAddExpense={() => {
             setEditingExpense(null);
@@ -1485,6 +1490,20 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
       {/* Account Balance Modal (Saldo em Conta Bancária) */}
       {(() => {
         const targetBalanceMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
+        const targetPaidInflowAmount =
+          boletos
+            .filter((b) => {
+              const d = b.dueDate || b.paidAt || b.createdAt;
+              return isBoletoPaid(b) && d && d.startsWith(targetBalanceMonth);
+            })
+            .reduce((sum, b) => sum + b.amount, 0) +
+          sporadicServices
+            .filter((s) => {
+              const d = s.dueDate || s.date;
+              return s.status === 'realized' && d && d.startsWith(targetBalanceMonth);
+            })
+            .reduce((sum, s) => sum + s.amount, 0);
+
         const targetPaidExpensesAmount = expenses
           .filter((e) => {
             const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
@@ -1504,6 +1523,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
             }
             selectedMonth={targetBalanceMonth}
             paidExpensesAmount={targetPaidExpensesAmount}
+            paidInflowAmount={targetPaidInflowAmount}
             onToast={onToast}
           />
         );

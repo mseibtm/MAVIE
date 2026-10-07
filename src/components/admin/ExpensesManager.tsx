@@ -18,12 +18,14 @@ import {
   CreditCard,
   Building,
 } from 'lucide-react';
-import { Expense, MonthlyBalance, PDFAttachment } from '../../types';
+import { Expense, MonthlyBalance, PDFAttachment, Boleto, SporadicService } from '../../types';
 import { downloadDataUrl } from '../../utils/boletoPdfGenerator';
 
 interface ExpensesManagerProps {
   expenses: Expense[];
   monthlyBalances: MonthlyBalance[];
+  boletos?: Boleto[];
+  sporadicServices?: SporadicService[];
   selectedPeriod: string; // 'all' or 'YYYY-MM'
   onAddExpense: () => void;
   onEditExpense: (expense: Expense) => void;
@@ -50,6 +52,8 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
 export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   expenses,
   monthlyBalances,
+  boletos = [],
+  sporadicServices = [],
   selectedPeriod,
   onAddExpense,
   onEditExpense,
@@ -81,9 +85,27 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   const totalPaid = paidExpenses.reduce((sum, e) => sum + e.amount, 0);
   const totalPending = pendingExpenses.reduce((sum, e) => sum + e.amount, 0);
 
-  // Account balance strictly for the target month with automatic debit of paid expenses (Item 1)
+  // Account balance strictly for the target month with automatic accrual of paid boletos and debit of paid expenses
   const currentBalanceRecord = monthlyBalances.find((b) => b.month === targetMonth) || null;
   const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
+
+  // Paid inflows (boletos and sporadic services) strictly for target month
+  const targetPaidBoletos = (boletos || [])
+    .filter((b) => {
+      const d = b.dueDate || b.paidAt || b.createdAt;
+      const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+      return isPaid && d && d.startsWith(targetMonth);
+    })
+    .reduce((sum, b) => sum + b.amount, 0);
+
+  const targetRealizedSporadics = (sporadicServices || [])
+    .filter((s) => {
+      const d = s.dueDate || s.date;
+      return s.status === 'realized' && d && d.startsWith(targetMonth);
+    })
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  const targetTotalPaidInflow = targetPaidBoletos + targetRealizedSporadics;
 
   // The account balance is automatically debited by all paid expenses of the month
   const targetMonthPaidExpenses = expenses
@@ -93,7 +115,8 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
     })
     .reduce((sum, e) => sum + e.amount, 0);
 
-  const currentAccountBalance = initialBaseBalance - targetMonthPaidExpenses;
+  // Current balance: Base + Paid Inflows (boletos) - Paid Expenses
+  const currentAccountBalance = initialBaseBalance + targetTotalPaidInflow - targetMonthPaidExpenses;
 
   const filteredExpenses = periodExpenses.filter((e) => {
     if (categoryFilter !== 'all' && e.category !== categoryFilter) return false;
@@ -188,7 +211,9 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span className="truncate max-w-[150px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
             <span className="text-sky-400 font-semibold">
-              {targetMonthPaidExpenses > 0 ? `Débito: -${formatCurrency(targetMonthPaidExpenses)}` : (currentBalanceRecord?.month === targetMonth ? 'Conciliado' : 'Base')}
+              {targetTotalPaidInflow > 0 || targetMonthPaidExpenses > 0
+                ? `Entradas: +${formatCurrency(targetTotalPaidInflow)} | Débitos: -${formatCurrency(targetMonthPaidExpenses)}`
+                : (currentBalanceRecord?.month === targetMonth ? 'Conciliado' : 'Base')}
             </span>
           </div>
         </div>

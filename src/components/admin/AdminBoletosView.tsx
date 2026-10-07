@@ -20,9 +20,11 @@ import {
   Image as ImageIcon,
   Check,
   Sparkles,
+  Landmark,
+  ArrowUpRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Boleto, Client, BoletoStatus, PDFAttachment, SporadicService } from '../../types';
+import { Boleto, Client, BoletoStatus, PDFAttachment, SporadicService, MonthlyBalance, Expense } from '../../types';
 import { generateDigitableLine, generateRandomBarcode } from '../../utils/cpf';
 import { processReceiptFile } from '../../utils/boletoPdfGenerator';
 import { BoletoModal } from '../modals/BoletoModal';
@@ -32,6 +34,8 @@ import { PDFUploader } from '../common/PDFUploader';
 interface AdminBoletosViewProps {
   clients: Client[];
   boletos: Boleto[];
+  monthlyBalances?: MonthlyBalance[];
+  expenses?: Expense[];
   initialSelectedClientId?: string;
   onAddBoleto: (boleto: Omit<Boleto, 'id' | 'createdAt'>) => void;
   onAddSporadicService?: (service: Omit<SporadicService, 'id' | 'createdAt'>) => void;
@@ -41,11 +45,14 @@ interface AdminBoletosViewProps {
   onRemoveReceipt?: (boletoId: string) => void;
   onDeleteBoleto: (boletoId: string) => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
+  onNavigateToFinancial?: () => void;
 }
 
 export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   clients,
   boletos,
+  monthlyBalances = [],
+  expenses = [],
   initialSelectedClientId = '',
   onAddBoleto,
   onAddSporadicService,
@@ -55,6 +62,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   onRemoveReceipt,
   onDeleteBoleto,
   onToast,
+  onNavigateToFinancial,
 }) => {
   const [selectedClientId, setSelectedClientId] = useState<string>(initialSelectedClientId);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -225,8 +233,12 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       onUploadReceipt(receiptModalBoleto.id, uploadedReceiptFile, receiptAutoMarkPaid);
       onToast(
         'success',
-        'Comprovante Salvo!',
-        `Comprovante inserido no boleto #${receiptModalBoleto.id}${receiptAutoMarkPaid ? ' e status atualizado para Pago' : ''}.`
+        'Comprovante Salvo & Boleto Liquidado',
+        `Comprovante inserido no boleto #${receiptModalBoleto.id}${
+          receiptAutoMarkPaid
+            ? ` e marcado como Pago! O valor de ${formatCurrency(receiptModalBoleto.amount)} foi creditado no saldo em conta.`
+            : '.'
+        }`
       );
     }
     setReceiptModalBoleto(null);
@@ -235,12 +247,11 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
 
   const handleRemoveReceipt = () => {
     if (!receiptModalBoleto) return;
-    if (window.confirm('Deseja realmente remover o comprovante de pagamento deste boleto?')) {
-      if (onRemoveReceipt) {
-        onRemoveReceipt(receiptModalBoleto.id);
-      }
-      setReceiptModalBoleto(null);
+    if (onRemoveReceipt) {
+      onRemoveReceipt(receiptModalBoleto.id);
+      onToast('info', 'Comprovante Removido', `O comprovante do boleto #${receiptModalBoleto.id} foi removido.`);
     }
+    setReceiptModalBoleto(null);
   };
 
   const getEffectiveStatus = (b: Boleto): BoletoStatus => {
@@ -273,6 +284,41 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   })();
 
+  // Active Management Month (strictly from October 2026 onwards)
+  const targetMonth = '2026-10';
+  const isBoletoPaid = (b: Boleto) =>
+    b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+
+  const currentBalanceRecord = (monthlyBalances || []).find((b) => b.month === targetMonth) || null;
+  const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
+
+  // Paid inflows for target month
+  const targetPaidBoletosAmount = boletos
+    .filter((b) => {
+      const d = b.dueDate || b.paidAt || b.createdAt;
+      return isBoletoPaid(b) && d && d.startsWith(targetMonth);
+    })
+    .reduce((sum, b) => sum + b.amount, 0);
+
+  const targetPaidExpensesAmount = (expenses || [])
+    .filter((e) => {
+      const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+      return e.status === 'paid' && m === targetMonth;
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const currentAccountBalance = initialBaseBalance + targetPaidBoletosAmount - targetPaidExpensesAmount;
+
+  // Global counts for all boletos
+  const totalPaidBoletos = boletos.filter((b) => isBoletoPaid(b));
+  const totalPaidAmount = totalPaidBoletos.reduce((sum, b) => sum + b.amount, 0);
+
+  const totalPendingBoletos = boletos.filter((b) => !isBoletoPaid(b) && b.status !== 'overdue');
+  const totalPendingAmount = totalPendingBoletos.reduce((sum, b) => sum + b.amount, 0);
+
+  const totalOverdueBoletos = boletos.filter((b) => !isBoletoPaid(b) && (b.status === 'overdue' || b.dueDate < todayStr));
+  const totalOverdueAmount = totalOverdueBoletos.reduce((sum, b) => sum + b.amount, 0);
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -280,11 +326,11 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 mb-1">
             <CreditCard className="w-4 h-4" />
-            <span>Gestão de Títulos</span>
+            <span>Gestão de Títulos & Entradas</span>
           </div>
           <h1 className="text-2xl font-black text-white">Boletos & Comprovantes</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Emita boletos, altere datas de vencimento, insira comprovantes de pagamento e acompanhe as baixas financeiras.
+            Emita boletos, dê baixa de pagamentos (crédito automático em conta), anexe comprovantes e acompanhe os recebimentos.
           </p>
         </div>
 
@@ -292,7 +338,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
           {onAddSporadicService && (
             <button
               onClick={() => setIsSporadicModalOpen(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs rounded-xl border border-amber-500/30 transition-all shadow-sm active:scale-95"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold text-xs rounded-xl border border-amber-500/30 transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <Briefcase className="w-4 h-4 text-amber-400" />
               <span>Novo Serviço Esporádico</span>
@@ -301,11 +347,100 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
 
           <button
             onClick={openNewBoletoModal}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0 active:scale-95"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0 active:scale-95 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Emitir Novo Boleto</span>
           </button>
+        </div>
+      </div>
+
+      {/* 4 SUMMARY KPI CARDS (SALDO EM CONTA, LIQUIDADOS, A VENCER, EM ATRASO) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Saldo Atual em Conta */}
+        <div className="bg-slate-900 border border-sky-500/30 hover:border-sky-500/60 rounded-2xl p-4 shadow-sm transition-all group">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+              <Landmark className="w-3.5 h-3.5" />
+              <span>Saldo Atual em Conta ({targetMonth})</span>
+            </span>
+            {onNavigateToFinancial && (
+              <button
+                onClick={onNavigateToFinancial}
+                className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold flex items-center gap-0.5 cursor-pointer"
+                title="Ver Extrato & Fluxo de Caixa"
+              >
+                <span>Ver Fluxo</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+          <div className={`text-2xl font-black font-mono ${currentAccountBalance >= 0 ? 'text-white' : 'text-rose-400'}`}>
+            {formatCurrency(currentAccountBalance)}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+            <span className="truncate max-w-[140px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
+            <span className="text-emerald-400 font-bold">
+              +{formatCurrency(targetPaidBoletosAmount)} em entradas
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Boletos Liquidados (Entradas) */}
+        <div className="bg-slate-900 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl p-4 shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Liquidados (Entradas)</span>
+            </span>
+            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full">
+              {totalPaidBoletos.length} pagos
+            </span>
+          </div>
+          <div className="text-2xl font-black font-mono text-emerald-400">
+            {formatCurrency(totalPaidAmount)}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Valores creditados no saldo bancário
+          </p>
+        </div>
+
+        {/* Card 3: Boletos A Vencer */}
+        <div className="bg-slate-900 border border-amber-500/30 hover:border-amber-500/60 rounded-2xl p-4 shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>A Vencer (Previsto)</span>
+            </span>
+            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-950 text-amber-300 border border-amber-800 rounded-full">
+              {totalPendingBoletos.length} pendentes
+            </span>
+          </div>
+          <div className="text-2xl font-black font-mono text-amber-400">
+            {formatCurrency(totalPendingAmount)}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Recebimentos programados
+          </p>
+        </div>
+
+        {/* Card 4: Boletos Em Atraso */}
+        <div className="bg-slate-900 border border-rose-500/30 hover:border-rose-500/60 rounded-2xl p-4 shadow-sm transition-all">
+          <div className="flex items-center justify-between text-slate-400 mb-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Em Atraso</span>
+            </span>
+            <span className="px-2 py-0.5 text-[10px] font-extrabold bg-rose-950 text-rose-300 border border-rose-800 rounded-full">
+              {totalOverdueBoletos.length} vencidos
+            </span>
+          </div>
+          <div className="text-2xl font-black font-mono text-rose-400">
+            {formatCurrency(totalOverdueAmount)}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-1">
+            Cobranças com prazo expirado
+          </p>
         </div>
       </div>
 
@@ -529,7 +664,21 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                                 onUpdateBoletoStatus(boleto.id, newStatus);
                                 const statusLabel =
                                   newStatus === 'pending' ? 'A vencer' : newStatus === 'paid' ? 'Pago' : 'Em atraso';
-                                onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
+                                if (newStatus === 'paid') {
+                                  onToast(
+                                    'success',
+                                    'Boleto Liquidado (Entrada)',
+                                    `Boleto #${boleto.id} baixado como Pago! O valor de ${formatCurrency(boleto.amount)} foi creditado no saldo em conta.`
+                                  );
+                                } else if (effectiveStatus === 'paid') {
+                                  onToast(
+                                    'info',
+                                    'Status Atualizado (Estorno)',
+                                    `Boleto #${boleto.id} alterado para "${statusLabel}". O valor de ${formatCurrency(boleto.amount)} foi estornado do saldo da conta.`
+                                  );
+                                } else {
+                                  onToast('success', 'Status Atualizado', `Boleto #${boleto.id} alterado para "${statusLabel}".`);
+                                }
                               }}
                               className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all shadow-sm ${
                                 effectiveStatus === 'paid'

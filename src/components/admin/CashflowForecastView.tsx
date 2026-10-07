@@ -88,9 +88,12 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
     return d && d.startsWith(targetMonth);
   });
 
-  const paidBoletos = targetBoletos.filter((b) => b.status === 'paid');
-  const pendingBoletos = targetBoletos.filter((b) => b.status === 'pending');
-  const overdueBoletos = targetBoletos.filter((b) => b.status === 'overdue');
+  const isBoletoPaid = (b: Boleto) =>
+    b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+
+  const paidBoletos = targetBoletos.filter((b) => isBoletoPaid(b));
+  const pendingBoletos = targetBoletos.filter((b) => !isBoletoPaid(b) && b.status !== 'overdue');
+  const overdueBoletos = targetBoletos.filter((b) => !isBoletoPaid(b) && b.status === 'overdue');
 
   const paidBoletosAmount = paidBoletos.reduce((acc, b) => acc + b.amount, 0);
   const pendingBoletosAmount = pendingBoletos.reduce((acc, b) => acc + b.amount, 0);
@@ -132,8 +135,8 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   const pendingExpensesAmount = pendingExpenses.reduce((acc, e) => acc + e.amount, 0);
   const totalExpensesAmount = paidExpensesAmount + pendingExpensesAmount;
 
-  // Saldo em Conta Bancária Atualizado (debita automaticamente as despesas pagas do mês - Item 1)
-  const currentAccountBalance = initialBaseBalance - paidExpensesAmount;
+  // Saldo em Conta Bancária Atualizado (acresce entradas de boletos e esporádicos quitados e debita despesas pagas do mês)
+  const currentAccountBalance = initialBaseBalance + totalReceitasRealizadas - paidExpensesAmount;
 
   // 4. RESULTADO LÍQUIDO / DRE OPERACIONAL
   const realizedNetResult = totalReceitasRealizadas - paidExpensesAmount;
@@ -142,9 +145,9 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
     ? ((projectedNetResult / totalReceitasPrevistasGerais) * 100).toFixed(1)
     : '0';
 
-  // 5. SALDO FINAL PROJETADO AO FIM DO MÊS (Item 2)
-  // Formula: Saldo Atual em Conta (já com despesas pagas debitadas) + Entradas Previstas a Receber - Saídas Previstas a Pagar (Pendentes)
-  // Equivalente: Saldo Base Informado + Entradas Previstas a Receber - Total de Despesas do Mês
+  // 5. SALDO FINAL PROJETADO AO FIM DO MÊS
+  // Formula: Saldo Atual em Conta (com entradas quitadas acrescidas e despesas pagas debitadas) + Entradas Previstas a Receber - Saídas Previstas a Pagar (Pendentes)
+  // Equivalente: Saldo Base Informado + Total de Receitas do Mês - Total de Despesas do Mês
   const projectedFinalBalance = currentAccountBalance + totalPrevisaoEntradasAReceber - pendingExpensesAmount;
 
   // Monthly Chart Data (comparative historical and projected)
@@ -279,7 +282,9 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
           <div className="text-[10px] text-slate-400 mt-2 border-t border-slate-800/80 pt-2 flex items-center justify-between">
             <span className="truncate max-w-[120px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
             <span className="text-sky-400 font-semibold">
-              {paidExpensesAmount > 0 ? `Débito de ${formatCurrency(paidExpensesAmount)}` : 'Base Informada'}
+              {totalReceitasRealizadas > 0 || paidExpensesAmount > 0
+                ? `Entradas: +${formatCurrency(totalReceitasRealizadas)} | Saídas: -${formatCurrency(paidExpensesAmount)}`
+                : 'Base Informada'}
             </span>
           </div>
         </div>
@@ -385,8 +390,8 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
               {formatCurrency(currentAccountBalance)}
             </span>
             <span className="text-[10px] text-slate-500 block mt-0.5">
-              {paidExpensesAmount > 0
-                ? `Base (${formatCurrency(initialBaseBalance)}) - Débito pago (${formatCurrency(paidExpensesAmount)})`
+              {totalReceitasRealizadas > 0 || paidExpensesAmount > 0
+                ? `Base (${formatCurrency(initialBaseBalance)}) + Entradas (${formatCurrency(totalReceitasRealizadas)}) - Saídas (${formatCurrency(paidExpensesAmount)})`
                 : 'Saldo bancário informado'}
             </span>
           </div>
