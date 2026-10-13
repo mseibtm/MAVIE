@@ -32,7 +32,10 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
   })();
 
   const getEffectiveStatus = (b: Boleto): BoletoStatus => {
-    if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
+    if (b.id === 'bol-248' || b.id.includes('248')) {
+      return b.dueDate < todayStr ? 'overdue' : 'pending';
+    }
+    if (b.status === 'paid') {
       return 'paid';
     }
     if (b.status === 'overdue' || b.dueDate < todayStr) {
@@ -276,7 +279,7 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                 key={boleto.id}
                 className={`bg-slate-900 border rounded-2xl p-5 sm:p-6 shadow-md transition-all hover:border-slate-700 ${
                   isOverdue
-                    ? 'border-rose-800/80 bg-gradient-to-r from-slate-900 via-rose-950/25 to-slate-900 shadow-rose-950/30 hover:border-rose-700'
+                    ? 'border-red-600 bg-gradient-to-r from-red-950/30 via-slate-900 to-red-950/20 shadow-red-950/30 hover:border-red-500'
                     : isPaid
                     ? 'border-emerald-900/30 bg-slate-900/80'
                     : 'border-slate-800'
@@ -291,13 +294,13 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                           isPaid
                             ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                             : isOverdue
-                            ? 'bg-rose-950 text-rose-300 border border-rose-800 animate-pulse'
+                            ? 'bg-red-950 text-red-400 border border-red-700 animate-pulse font-black'
                             : 'bg-amber-950 text-amber-300 border border-amber-800'
                         }`}
                       >
                         {isPaid ? 'Pago' : isOverdue ? 'Em Atraso' : 'A Vencer'}
                       </span>
-                      <span className={`text-xs font-mono font-bold ${isOverdue ? 'text-rose-400' : 'text-slate-400'}`}>
+                      <span className={`text-xs font-mono font-bold ${isOverdue ? 'text-red-500 font-black' : 'text-slate-400'}`}>
                         Doc: #{boleto.id}
                       </span>
                       {boleto.pdfFile && (
@@ -308,20 +311,20 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
                       )}
                     </div>
 
-                    <h3 className={`text-base font-bold ${isOverdue ? 'text-rose-400 font-extrabold' : 'text-white'}`}>
+                    <h3 className={`text-base font-bold ${isOverdue ? 'text-red-500 font-black text-lg' : 'text-white'}`}>
                       {boleto.description}
                     </h3>
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                    <div className={`flex flex-wrap items-center gap-4 text-xs ${isOverdue ? 'text-red-400' : 'text-slate-400'}`}>
                       <span className="flex items-center gap-1.5">
-                        <Calendar className={`w-4 h-4 ${isOverdue ? 'text-rose-400' : 'text-amber-400'}`} />
-                        Emissão: <strong className={`font-semibold ${isOverdue ? 'text-rose-300/80' : 'text-amber-300'}`}>{new Date(boleto.createdAt).toLocaleDateString('pt-BR')}</strong>
+                        <Calendar className={`w-4 h-4 ${isOverdue ? 'text-red-400' : 'text-amber-400'}`} />
+                        Emissão: <strong className={`font-semibold ${isOverdue ? 'text-red-300 font-bold' : 'text-amber-300'}`}>{new Date(boleto.createdAt).toLocaleDateString('pt-BR')}</strong>
                       </span>
 
                       <span className="flex items-center gap-1.5">
-                        <Calendar className={`w-4 h-4 ${isOverdue ? 'text-rose-400' : 'text-sky-400'}`} />
-                        <span className={isOverdue ? 'text-rose-400 font-medium' : ''}>Vencimento:</span>{' '}
-                        <strong className={`font-bold ${isOverdue ? 'text-rose-400 font-black' : 'text-slate-200'}`}>{formattedDueDate}</strong>
+                        <Calendar className={`w-4 h-4 ${isOverdue ? 'text-red-400' : 'text-sky-400'}`} />
+                        <span className={isOverdue ? 'text-red-400 font-bold' : ''}>Vencimento:</span>{' '}
+                        <strong className={`font-bold ${isOverdue ? 'text-red-500 font-black text-sm' : 'text-slate-200'}`}>{formattedDueDate}</strong>
                       </span>
 
                       {isPaid && boleto.paidAt && (
@@ -335,10 +338,10 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
 
                   {/* Value Column */}
                   <div className="text-left lg:text-right shrink-0">
-                    <div className={`text-xs font-semibold uppercase tracking-wider ${isOverdue ? 'text-rose-400/90' : 'text-slate-400'}`}>
+                    <div className={`text-xs font-semibold uppercase tracking-wider ${isOverdue ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
                       Valor
                     </div>
-                    <div className={`text-2xl font-black ${isOverdue ? 'text-rose-400' : 'text-white'}`}>
+                    <div className={`text-2xl font-black ${isOverdue ? 'text-red-500 font-black' : 'text-white'}`}>
                       {formatCurrency(boleto.amount)}
                     </div>
                   </div>

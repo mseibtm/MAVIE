@@ -158,3 +158,48 @@ export interface MonthlyBalance {
   updatedAt: string;
   notes?: string;
 }
+
+export type DeviceCategory =
+  | 'rastreador'
+  | 'sensor'
+  | 'bloqueador'
+  | 'camera'
+  | 'chip'
+  | 'acessorio'
+  | 'identificador'
+  | 'outros';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  model: string;
+  category: DeviceCategory;
+  brand: string;
+  sku: string;
+  quantity: number;
+  minQuantity: number;
+  unitCost?: number;
+  location?: string;
+  description?: string;
+  status: 'available' | 'low_stock' | 'out_of_stock';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MovementType = 'entry' | 'exit';
+
+export interface StockMovement {
+  id: string;
+  itemId: string;
+  itemName: string;
+  type: MovementType;
+  quantity: number;
+  previousQuantity: number;
+  newQuantity: number;
+  reason: string;
+  clientId?: string;
+  clientName?: string;
+  technician?: string;
+  notes?: string;
+  timestamp: string;
+}

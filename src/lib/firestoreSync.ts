@@ -10,7 +10,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment, Expense, MonthlyBalance } from '../types';
+import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, SporadicService, BoletoStatus, PDFAttachment, Expense, MonthlyBalance, InventoryItem, StockMovement } from '../types';
 import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES } from '../data/mockData';
 
 // Firestore collections
@@ -22,6 +22,8 @@ const COLS = {
   SPORADIC: 'sporadic_services',
   EXPENSES: 'expenses',
   MONTHLY_BALANCES: 'monthly_balances',
+  INVENTORY: 'inventory',
+  STOCK_MOVEMENTS: 'stock_movements',
   NOTIFICATIONS: 'notifications',
 };
 
@@ -463,3 +465,56 @@ export async function deleteMonthlyBalanceFromFirestore(id: string) {
     console.error('Error deleting monthly balance from Firestore:', err);
   }
 }
+
+export function subscribeInventory(callback: (items: InventoryItem[]) => void) {
+  return onSnapshot(
+    collection(db, COLS.INVENTORY),
+    (snap) => {
+      const list: InventoryItem[] = [];
+      snap.forEach((d) => list.push(d.data() as InventoryItem));
+      // Sort by name or creation
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      callback(list);
+    },
+    (err) => console.warn('Firestore inventory listener error:', err)
+  );
+}
+
+export async function saveInventoryItemToFirestore(item: InventoryItem) {
+  try {
+    await setDoc(doc(db, COLS.INVENTORY, item.id), removeUndefinedFields(item), { merge: true });
+  } catch (err) {
+    console.error('Error saving inventory item to Firestore:', err);
+  }
+}
+
+export async function deleteInventoryItemFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.INVENTORY, id));
+  } catch (err) {
+    console.error('Error deleting inventory item from Firestore:', err);
+  }
+}
+
+export function subscribeStockMovements(callback: (movements: StockMovement[]) => void) {
+  return onSnapshot(
+    collection(db, COLS.STOCK_MOVEMENTS),
+    (snap) => {
+      const list: StockMovement[] = [];
+      snap.forEach((d) => list.push(d.data() as StockMovement));
+      // Sort by timestamp desc
+      list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      callback(list);
+    },
+    (err) => console.warn('Firestore stock movements listener error:', err)
+  );
+}
+
+export async function saveStockMovementToFirestore(movement: StockMovement) {
+  try {
+    await setDoc(doc(db, COLS.STOCK_MOVEMENTS, movement.id), removeUndefinedFields(movement), { merge: true });
+  } catch (err) {
+    console.error('Error saving stock movement to Firestore:', err);
+  }
+}
+

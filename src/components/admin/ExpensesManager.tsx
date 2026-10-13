@@ -92,8 +92,8 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   // Paid inflows (boletos and sporadic services) strictly for target month
   const targetPaidBoletos = (boletos || [])
     .filter((b) => {
-      const d = b.dueDate || b.paidAt || b.createdAt;
-      const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+      const d = b.paidAt || b.dueDate || b.createdAt;
+      const isPaid = b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
       return isPaid && d && d.startsWith(targetMonth);
     })
     .reduce((sum, b) => sum + b.amount, 0);

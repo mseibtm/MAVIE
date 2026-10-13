@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldCheck, User, LogOut, FileText, Ticket, CreditCard, LayoutDashboard, RefreshCw, TrendingUp, KeyRound, Briefcase } from 'lucide-react';
+import { ShieldCheck, User, LogOut, FileText, Ticket, CreditCard, LayoutDashboard, RefreshCw, TrendingUp, KeyRound, Briefcase, Boxes } from 'lucide-react';
 import { UserSession, AppNotification } from '../types';
 import { MavieLogo } from './MavieLogo';
 import { NotificationBell } from './notifications/NotificationBell';
@@ -125,6 +125,17 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>Clientes</span>
+                  </button>
+                  <button
+                    onClick={() => onTabChange('admin-inventory')}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      activeTab === 'admin-inventory'
+                        ? 'bg-indigo-600 text-white shadow-sm font-bold'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                    <span>Estoque</span>
                   </button>
                   <button
                     onClick={() => onTabChange('admin-financial')}
@@ -328,6 +339,14 @@ export const Header: React.FC<HeaderProps> = ({
                   }`}
                 >
                   Clientes
+                </button>
+                <button
+                  onClick={() => onTabChange('admin-inventory')}
+                  className={`px-3 py-1 text-xs font-medium rounded-lg whitespace-nowrap ${
+                    activeTab === 'admin-inventory' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400'
+                  }`}
+                >
+                  Estoque
                 </button>
                 <button
                   onClick={() => onTabChange('admin-financial')}

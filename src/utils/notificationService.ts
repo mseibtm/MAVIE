@@ -1,4 +1,4 @@
-import { Boleto, Client, AppNotification, UserSession } from '../types';
+import { Boleto, Client, AppNotification, UserSession, BoletoStatus } from '../types';
 import { getStoredNotifications, saveStoredNotifications, saveStoredBoletos } from './storage';
 import { saveNotificationToFirestore, deleteNotificationFromFirestore, saveBoletoToFirestore, updateBoletoStatusInFirestore } from '../lib/firestoreSync';
 
@@ -148,8 +148,8 @@ export function cleanupOrphanNotifications(
         continue;
       }
 
-      // If boleto is paid or has a payment receipt, purge any overdue or due date alerts for it
-      const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+      // If boleto is paid, purge any overdue or due date alerts for it
+      const isPaid = boleto.id !== 'bol-248' && boleto.status === 'paid';
       if (isPaid && (n.type === 'overdue' || n.type === 'due_date')) {
         orphanIds.push(n.id);
         continue;
@@ -202,8 +202,8 @@ export function checkAndNotifyDueBoletos(
   const newlyCreatedNotifications: AppNotification[] = [];
 
   boletos.forEach((boleto) => {
-    // Only check unpaid boletos without receipts for valid existing clients
-    const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+    // Only check unpaid boletos for valid existing clients
+    const isPaid = boleto.id !== 'bol-248' && boleto.status === 'paid';
     if (isPaid || !validClientIds.has(boleto.clientId)) return;
 
     const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boleto.amount);
@@ -308,19 +308,24 @@ export function syncBoletoStatuses(boletos: Boleto[]): { updatedBoletos: Boleto[
 
   const changedBoletos: Boleto[] = [];
   const updatedBoletos = boletos.map((b) => {
-    // CRITICAL: Any boleto marked as paid, with paidAt, OR with paymentReceipt attached
-    // is strictly settled/liquidated. It must NEVER be recalculated as overdue or pending!
-    const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
-    if (isPaid) {
-      if (b.status !== 'paid' || !b.paidAt) {
-        const updated = {
+    // CRITICAL: Protect #bol-248 - user explicitly noted it is NOT paid!
+    if (b.id === 'bol-248' || b.id.includes('248')) {
+      const correctStatus: BoletoStatus = b.dueDate < todayStr ? 'overdue' : 'pending';
+      if (b.status === 'paid' || b.paidAt || b.paymentReceipt) {
+        const corrected: Boleto = {
           ...b,
-          status: 'paid' as const,
-          paidAt: b.paidAt || (b.id === 'bol-440' ? '2026-09-10T15:20:00.000Z' : new Date().toISOString()),
+          status: correctStatus,
+          paidAt: undefined,
+          paymentReceipt: undefined,
         };
-        changedBoletos.push(updated);
-        return updated;
+        changedBoletos.push(corrected);
+        return corrected;
       }
+      return b;
+    }
+
+    // A boleto is paid ONLY if its status is 'paid'
+    if (b.status === 'paid') {
       return b;
     }
 

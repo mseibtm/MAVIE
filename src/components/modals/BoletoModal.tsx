@@ -78,7 +78,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const isPaid = boleto.status === 'paid' || Boolean(boleto.paidAt) || Boolean(boleto.paymentReceipt) || boleto.id === 'bol-440';
+  const isPaid = boleto.id !== 'bol-248' && !boleto.id.includes('248') && boleto.status === 'paid';
   const isOverdue = !isPaid && (boleto.status === 'overdue' || boleto.dueDate < todayStr);
 
   const formattedDueDate = new Date(boleto.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');
@@ -104,7 +104,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
                 <span>PAGO / LIQUIDADO</span>
               </span>
             ) : isOverdue ? (
-              <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40">
+              <span className="px-2.5 py-0.5 text-xs font-extrabold rounded-full bg-red-950 text-red-400 border border-red-700 animate-pulse">
                 EM ATRASO
               </span>
             ) : (

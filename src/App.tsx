@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification, SporadicService, Expense, MonthlyBalance } from './types';
+import { UserSession, Client, Boleto, NotaFiscal, SupportTicket, BoletoStatus, TicketStatus, PDFAttachment, AppNotification, SporadicService, Expense, MonthlyBalance, InventoryItem, StockMovement } from './types';
 import {
   getStoredClients, saveStoredClients,
   getStoredBoletos, saveStoredBoletos,
@@ -9,6 +9,8 @@ import {
   getStoredExpenses, saveStoredExpenses,
   getStoredMonthlyBalances, saveStoredMonthlyBalances,
   MOCK_SPORADIC_IDS, MOCK_EXPENSE_IDS, MOCK_BALANCE_IDS,
+  getStoredInventoryItems, saveStoredInventoryItems,
+  getStoredStockMovements, saveStoredStockMovements,
   getStoredNotifications, saveStoredNotifications,
   getStoredAdminPassword, saveStoredAdminPassword,
   getStoredSession, saveStoredSession, touchStoredSession,
@@ -52,6 +54,11 @@ import {
   deleteExpenseFromFirestore,
   saveMonthlyBalanceToFirestore,
   deleteMonthlyBalanceFromFirestore,
+  subscribeInventory,
+  saveInventoryItemToFirestore,
+  deleteInventoryItemFromFirestore,
+  subscribeStockMovements,
+  saveStockMovementToFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
@@ -77,6 +84,7 @@ import { AdminFinancialView } from './components/admin/AdminFinancialView';
 import { AdminBoletosView } from './components/admin/AdminBoletosView';
 import { AdminNFesView } from './components/admin/AdminNFesView';
 import { AdminTicketsView } from './components/admin/AdminTicketsView';
+import { AdminInventoryView } from './components/admin/AdminInventoryView';
 
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(() => getStoredSession());
@@ -93,6 +101,8 @@ export default function App() {
   const [sporadicServices, setSporadicServices] = useState<SporadicService[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [monthlyBalances, setMonthlyBalances] = useState<MonthlyBalance[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
 
   // Notifications & Push Permission state
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -161,9 +171,11 @@ export default function App() {
     // Map of month -> total paid boletos & realized sporadic services (Entradas)
     const paidInflowByMonth = new Map<string, number>();
     currentBoletos.forEach((b) => {
-      const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+      // boleto #bol-248 is explicitly not paid
+      if (b.id === 'bol-248' || b.id.includes('248')) return;
+      const isPaid = b.status === 'paid';
       if (isPaid) {
-        const m = (b.dueDate || b.paidAt || b.createdAt)?.substring(0, 7);
+        const m = (b.paidAt || b.dueDate || b.createdAt)?.substring(0, 7);
         if (m) {
           paidInflowByMonth.set(m, (paidInflowByMonth.get(m) || 0) + b.amount);
         }
@@ -223,8 +235,25 @@ export default function App() {
   useEffect(() => {
     // 1. Initial local load
     const loadedClients = getStoredClients();
-    const loadedBoletos = getStoredBoletos();
+    const rawBoletos = getStoredBoletos();
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const loadedBoletos = rawBoletos.map((b) => {
+      if (b.id === 'bol-248' || b.id.includes('248')) {
+        const correctStatus: BoletoStatus = b.dueDate < todayStr ? 'overdue' : 'pending';
+        updateBoletoStatusInFirestore(b.id, correctStatus, undefined);
+        removeBoletoReceiptFromFirestore(b.id);
+        return {
+          ...b,
+          status: correctStatus,
+          paidAt: undefined,
+          paymentReceipt: undefined,
+        };
+      }
+      return b;
+    });
     const syncedBoletos = syncAndSaveBoletoStatuses(loadedBoletos);
+    saveStoredBoletos(syncedBoletos);
     setClients(loadedClients);
     setBoletos(syncedBoletos);
     setNfes(getStoredNFes());
@@ -237,6 +266,10 @@ export default function App() {
     setExpenses(loadedExpenses);
     setMonthlyBalances(syncedInitialBalances);
     saveStoredMonthlyBalances(syncedInitialBalances);
+    const loadedInventory = getStoredInventoryItems();
+    const loadedStockMovements = getStoredStockMovements();
+    setInventoryItems(loadedInventory);
+    setStockMovements(loadedStockMovements);
     setAdminPassword(getStoredAdminPassword());
     
     // Check due dates and load notifications
@@ -308,25 +341,28 @@ export default function App() {
 
           const mergedRemote = cleanedRemote.map((rb) => {
             const lb = localMap.get(rb.id);
-            // CRITICAL: Protect PAID status from being reverted by stale snapshots or date checks
-            const isPaid =
-              rb.status === 'paid' ||
-              lb?.status === 'paid' ||
-              Boolean(rb.paidAt) ||
-              Boolean(lb?.paidAt) ||
-              Boolean(rb.paymentReceipt) ||
-              Boolean(lb?.paymentReceipt) ||
-              rb.id === 'bol-440';
 
-            const resolvedStatus: BoletoStatus = isPaid ? 'paid' : rb.status;
-            const resolvedPaidAt = isPaid
-              ? (rb.paidAt || lb?.paidAt || (rb.id === 'bol-440' ? '2026-09-10T15:20:00.000Z' : new Date().toISOString()))
-              : undefined;
-
-            // If it is paid but remote doesn't have status: 'paid', sync remote immediately
-            if (isPaid && (rb.status !== 'paid' || !rb.paidAt)) {
-              updateBoletoStatusInFirestore(rb.id, 'paid', resolvedPaidAt);
+            // CRITICAL: Protect #bol-248 from ever being marked as paid
+            if (rb.id === 'bol-248' || rb.id.includes('248')) {
+              const now = new Date();
+              const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+              const correctedStatus: BoletoStatus = rb.dueDate < todayStr ? 'overdue' : 'pending';
+              if (rb.status === 'paid' || rb.paidAt || rb.paymentReceipt) {
+                updateBoletoStatusInFirestore(rb.id, correctedStatus, undefined);
+                removeBoletoReceiptFromFirestore(rb.id);
+              }
+              return {
+                ...rb,
+                status: correctedStatus,
+                paidAt: undefined,
+                paymentReceipt: undefined,
+                pdfFile: lb?.pdfFile || rb.pdfFile,
+              };
             }
+
+            // Normal boleto resolution: respect rb.status, never force 'paid'
+            const resolvedStatus: BoletoStatus = rb.status;
+            const resolvedPaidAt = resolvedStatus === 'paid' ? (rb.paidAt || lb?.paidAt || new Date().toISOString()) : undefined;
 
             const resolvedPdf = (lb?.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_'))
               ? lb.pdfFile
@@ -459,6 +495,18 @@ export default function App() {
         });
       });
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
+      const unsubInventory = subscribeInventory((remoteInventory) => {
+        if (remoteInventory && remoteInventory.length > 0) {
+          setInventoryItems(remoteInventory);
+          saveStoredInventoryItems(remoteInventory);
+        }
+      });
+      const unsubStockMovements = subscribeStockMovements((remoteMovements) => {
+        if (remoteMovements && remoteMovements.length > 0) {
+          setStockMovements(remoteMovements);
+          saveStoredStockMovements(remoteMovements);
+        }
+      });
 
       return () => {
         clearInterval(dateCheckTimer);
@@ -471,6 +519,8 @@ export default function App() {
         unsubBalances();
         unsubNotifs();
         unsubAdminPass();
+        unsubInventory();
+        unsubStockMovements();
       };
     });
   }, []);
@@ -937,8 +987,7 @@ export default function App() {
       let updatedBoleto: Boleto | undefined;
       const updated = prev.map((b) => {
         if (b.id === boletoId) {
-          // CRITICAL: If boleto was already paid, status MUST STAY PAID!
-          const isPaid = b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+          const isPaid = b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
           const newStatus: BoletoStatus = isPaid ? 'paid' : (newDueDate < todayStr ? 'overdue' : 'pending');
           const item: Boleto = {
             ...b,
@@ -1311,6 +1360,142 @@ export default function App() {
     }
   };
 
+  // --- INVENTORY MANAGEMENT HANDLERS ---
+  const handleAddDevice = (
+    deviceData: Omit<InventoryItem, 'id' | 'createdAt' | 'updatedAt' | 'status'> & { id?: string }
+  ) => {
+    const now = new Date().toISOString();
+    const qty = Math.max(0, Number(deviceData.quantity) || 0);
+    const minQty = Math.max(1, Number(deviceData.minQuantity) || 5);
+    const status: 'available' | 'low_stock' | 'out_of_stock' =
+      qty === 0 ? 'out_of_stock' : qty <= minQty ? 'low_stock' : 'available';
+
+    const newDevice: InventoryItem = {
+      id: deviceData.id || `dev-${Date.now()}`,
+      ...deviceData,
+      quantity: qty,
+      minQuantity: minQty,
+      status,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setInventoryItems((prev) => {
+      const updated = [newDevice, ...prev.filter((d) => d.id !== newDevice.id)];
+      saveStoredInventoryItems(updated);
+      return updated;
+    });
+    saveInventoryItemToFirestore(newDevice);
+
+    if (qty > 0) {
+      const entryMovement: StockMovement = {
+        id: `mov-${Date.now()}`,
+        itemId: newDevice.id,
+        itemName: newDevice.name,
+        type: 'entry',
+        quantity: qty,
+        previousQuantity: 0,
+        newQuantity: qty,
+        reason: 'Cadastro Inicial no Estoque',
+        timestamp: now,
+      };
+      setStockMovements((prev) => {
+        const updated = [entryMovement, ...prev];
+        saveStoredStockMovements(updated);
+        return updated;
+      });
+      saveStockMovementToFirestore(entryMovement);
+    }
+
+    addToast('success', 'Dispositivo Adicionado', `${newDevice.name} foi inserido no estoque com sucesso.`);
+  };
+
+  const handleUpdateDevice = (updatedDevice: InventoryItem) => {
+    const now = new Date().toISOString();
+    const qty = Math.max(0, Number(updatedDevice.quantity) || 0);
+    const minQty = Math.max(1, Number(updatedDevice.minQuantity) || 5);
+    const status: 'available' | 'low_stock' | 'out_of_stock' =
+      qty === 0 ? 'out_of_stock' : qty <= minQty ? 'low_stock' : 'available';
+
+    const finalDevice: InventoryItem = {
+      ...updatedDevice,
+      quantity: qty,
+      minQuantity: minQty,
+      status,
+      updatedAt: now,
+    };
+
+    setInventoryItems((prev) => {
+      const updated = prev.map((d) => (d.id === finalDevice.id ? finalDevice : d));
+      saveStoredInventoryItems(updated);
+      return updated;
+    });
+    saveInventoryItemToFirestore(finalDevice);
+    addToast('success', 'Dispositivo Atualizado', `${finalDevice.name} atualizado com sucesso.`);
+  };
+
+  const handleDeleteDevice = (deviceId: string) => {
+    const itemToDelete = inventoryItems.find((d) => d.id === deviceId);
+    setInventoryItems((prev) => {
+      const updated = prev.filter((d) => d.id !== deviceId);
+      saveStoredInventoryItems(updated);
+      return updated;
+    });
+    deleteInventoryItemFromFirestore(deviceId);
+    addToast('info', 'Dispositivo Excluído', `${itemToDelete?.name || 'Equipamento'} foi removido do catálogo.`);
+  };
+
+  const handleStockMovement = (movementData: Omit<StockMovement, 'id' | 'timestamp'>) => {
+    const now = new Date().toISOString();
+    const movement: StockMovement = {
+      id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      ...movementData,
+      timestamp: now,
+    };
+
+    setInventoryItems((prev) => {
+      const updated = prev.map((item) => {
+        if (item.id === movement.itemId) {
+          const newQty = Math.max(0, movement.newQuantity);
+          const status: 'available' | 'low_stock' | 'out_of_stock' =
+            newQty === 0 ? 'out_of_stock' : newQty <= item.minQuantity ? 'low_stock' : 'available';
+          const updatedItem: InventoryItem = {
+            ...item,
+            quantity: newQty,
+            status,
+            updatedAt: now,
+          };
+          saveInventoryItemToFirestore(updatedItem);
+          return updatedItem;
+        }
+        return item;
+      });
+      saveStoredInventoryItems(updated);
+      return updated;
+    });
+
+    setStockMovements((prev) => {
+      const updated = [movement, ...prev];
+      saveStoredStockMovements(updated);
+      return updated;
+    });
+    saveStockMovementToFirestore(movement);
+
+    if (movement.type === 'exit') {
+      addToast(
+        'success',
+        'Baixa de Volume Realizada',
+        `Baixa de ${movement.quantity} unidade(s) de "${movement.itemName}" efetuada com sucesso.`
+      );
+    } else {
+      addToast(
+        'success',
+        'Entrada de Volume Registrada',
+        `Entrada de ${movement.quantity} unidade(s) de "${movement.itemName}" adicionada ao estoque.`
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-slate-100 font-sans selection:bg-amber-500 selection:text-black flex flex-col">
       <Header
@@ -1481,6 +1666,19 @@ export default function App() {
                 onAddMessage={handleAddTicketMessage}
                 onUpdateTicketStatus={handleUpdateTicketStatus}
                 onCloseTicket={handleCloseTicket}
+                onToast={addToast}
+              />
+            )}
+
+            {activeTab === 'admin-inventory' && (
+              <AdminInventoryView
+                inventoryItems={inventoryItems}
+                stockMovements={stockMovements}
+                clients={clients}
+                onAddDevice={handleAddDevice}
+                onUpdateDevice={handleUpdateDevice}
+                onDeleteDevice={handleDeleteDevice}
+                onStockMovement={handleStockMovement}
                 onToast={addToast}
               />
             )}

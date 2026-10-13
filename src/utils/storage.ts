@@ -1,5 +1,5 @@
-import { Client, Boleto, NotaFiscal, SupportTicket, AppNotification, UserSession, SporadicService, Expense, MonthlyBalance, PDFAttachment } from '../types';
-import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES, INITIAL_EXPENSES, INITIAL_MONTHLY_BALANCES } from '../data/mockData';
+import { Client, Boleto, BoletoStatus, NotaFiscal, SupportTicket, AppNotification, UserSession, SporadicService, Expense, MonthlyBalance, PDFAttachment, InventoryItem, StockMovement } from '../types';
+import { INITIAL_CLIENTS, INITIAL_BOLETOS, INITIAL_NFES, INITIAL_TICKETS, INITIAL_SPORADIC_SERVICES, INITIAL_EXPENSES, INITIAL_MONTHLY_BALANCES, INITIAL_INVENTORY_ITEMS, INITIAL_STOCK_MOVEMENTS } from '../data/mockData';
 
 const KEYS = {
   CLIENTS: 'app_portal_clients',
@@ -9,6 +9,8 @@ const KEYS = {
   SPORADIC_SERVICES: 'app_portal_sporadic_services',
   EXPENSES: 'app_portal_expenses',
   MONTHLY_BALANCES: 'app_portal_monthly_balances',
+  INVENTORY: 'app_portal_inventory',
+  STOCK_MOVEMENTS: 'app_portal_stock_movements',
   NOTIFICATIONS: 'app_portal_notifications',
   ADMIN_PASSWORD: 'app_portal_admin_password',
   SESSION: 'app_portal_user_session',
@@ -194,11 +196,14 @@ export const getStoredBoletos = (): Boleto[] => {
     return list
       .filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId))
       .map((b) => {
-        if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
+        if (b.id === 'bol-248' || b.id.includes('248')) {
+          const now = new Date();
+          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
           return {
             ...b,
-            status: 'paid' as const,
-            paidAt: b.paidAt || (b.id === 'bol-440' ? '2026-09-10T15:20:00.000Z' : new Date().toISOString()),
+            status: (b.dueDate < todayStr ? 'overdue' : 'pending') as BoletoStatus,
+            paidAt: undefined,
+            paymentReceipt: undefined,
           };
         }
         return b;
@@ -326,6 +331,40 @@ export const saveStoredMonthlyBalances = (balances: MonthlyBalance[]) => {
   safeSetItem(KEYS.MONTHLY_BALANCES, filtered);
 };
 
+export const getStoredInventoryItems = (): InventoryItem[] => {
+  const data = localStorage.getItem(KEYS.INVENTORY);
+  if (!data) {
+    return INITIAL_INVENTORY_ITEMS;
+  }
+  try {
+    const list: InventoryItem[] = JSON.parse(data);
+    return Array.isArray(list) && list.length > 0 ? list : INITIAL_INVENTORY_ITEMS;
+  } catch {
+    return INITIAL_INVENTORY_ITEMS;
+  }
+};
+
+export const saveStoredInventoryItems = (items: InventoryItem[]) => {
+  safeSetItem(KEYS.INVENTORY, items);
+};
+
+export const getStoredStockMovements = (): StockMovement[] => {
+  const data = localStorage.getItem(KEYS.STOCK_MOVEMENTS);
+  if (!data) {
+    return INITIAL_STOCK_MOVEMENTS;
+  }
+  try {
+    const list: StockMovement[] = JSON.parse(data);
+    return Array.isArray(list) && list.length > 0 ? list : INITIAL_STOCK_MOVEMENTS;
+  } catch {
+    return INITIAL_STOCK_MOVEMENTS;
+  }
+};
+
+export const saveStoredStockMovements = (movements: StockMovement[]) => {
+  safeSetItem(KEYS.STOCK_MOVEMENTS, movements);
+};
+
 export const resetToInitialData = () => {
   localStorage.setItem(KEYS.CLIENTS, JSON.stringify(INITIAL_CLIENTS));
   localStorage.setItem(KEYS.BOLETOS, JSON.stringify(INITIAL_BOLETOS));
@@ -334,4 +373,6 @@ export const resetToInitialData = () => {
   localStorage.setItem(KEYS.SPORADIC_SERVICES, JSON.stringify(INITIAL_SPORADIC_SERVICES));
   localStorage.setItem(KEYS.EXPENSES, JSON.stringify(INITIAL_EXPENSES));
   localStorage.setItem(KEYS.MONTHLY_BALANCES, JSON.stringify(INITIAL_MONTHLY_BALANCES));
+  localStorage.setItem(KEYS.INVENTORY, JSON.stringify(INITIAL_INVENTORY_ITEMS));
+  localStorage.setItem(KEYS.STOCK_MOVEMENTS, JSON.stringify(INITIAL_STOCK_MOVEMENTS));
 };

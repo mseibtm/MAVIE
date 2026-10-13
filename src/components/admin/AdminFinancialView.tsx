@@ -264,7 +264,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
   // Realized Revenues Calculations
   const isBoletoPaid = (b: Boleto) =>
-    b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+    b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
 
   const realizedBoletosAmount = filteredBoletos
     .filter((b) => isBoletoPaid(b))
@@ -1493,7 +1493,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         const targetPaidInflowAmount =
           boletos
             .filter((b) => {
-              const d = b.dueDate || b.paidAt || b.createdAt;
+              const d = b.paidAt || b.dueDate || b.createdAt;
               return isBoletoPaid(b) && d && d.startsWith(targetBalanceMonth);
             })
             .reduce((sum, b) => sum + b.amount, 0) +

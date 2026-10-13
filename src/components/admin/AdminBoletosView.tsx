@@ -255,8 +255,8 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   };
 
   const getEffectiveStatus = (b: Boleto): BoletoStatus => {
-    if (b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440') {
-      return 'paid';
+    if (b.id === 'bol-248' || b.id.includes('248')) {
+      return b.dueDate < todayStr ? 'overdue' : 'pending';
     }
     return b.status;
   };
@@ -269,7 +269,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
     const matchSearch =
       b.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      b.id.includes(searchTerm) ||
+      b.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.cpf.includes(searchTerm);
 
@@ -287,15 +287,15 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   // Active Management Month (strictly from October 2026 onwards)
   const targetMonth = '2026-10';
   const isBoletoPaid = (b: Boleto) =>
-    b.status === 'paid' || Boolean(b.paidAt) || Boolean(b.paymentReceipt) || b.id === 'bol-440';
+    b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
 
   const currentBalanceRecord = (monthlyBalances || []).find((b) => b.month === targetMonth) || null;
   const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
 
-  // Paid inflows for target month
+  // Paid inflows for target month (whenever a boleto is paid, it increases account balance)
   const targetPaidBoletosAmount = boletos
     .filter((b) => {
-      const d = b.dueDate || b.paidAt || b.createdAt;
+      const d = b.paidAt || b.dueDate || b.createdAt;
       return isBoletoPaid(b) && d && d.startsWith(targetMonth);
     })
     .reduce((sum, b) => sum + b.amount, 0);
@@ -543,13 +543,13 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                 key={boleto.id}
                 className={`bg-slate-900 border rounded-2xl p-4 sm:p-5 shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
                   isDueOverdue
-                    ? 'border-rose-800/80 bg-gradient-to-r from-slate-900 via-rose-950/20 to-slate-900 shadow-rose-950/30 hover:border-rose-700'
+                    ? 'border-red-600 bg-gradient-to-r from-red-950/40 via-slate-900 to-red-950/30 shadow-red-950/40 hover:border-red-500'
                     : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="space-y-2 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs font-mono font-bold ${isDueOverdue ? 'text-rose-400' : 'text-slate-400'}`}>
+                    <span className={`text-xs font-mono font-bold ${isDueOverdue ? 'text-red-500 font-black' : 'text-slate-400'}`}>
                       #{boleto.id}
                     </span>
                     <AnimatePresence mode="wait">
@@ -562,21 +562,21 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                         className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border flex items-center gap-1 ${
                           boleto.status === 'paid'
                             ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-                            : boleto.status === 'overdue'
-                            ? 'bg-rose-950 text-rose-300 border-rose-800 animate-pulse'
+                            : isDueOverdue
+                            ? 'bg-red-950 text-red-400 border-red-700 animate-pulse font-black'
                             : 'bg-amber-950 text-amber-300 border-amber-800'
                         }`}
                       >
                         {boleto.status === 'paid' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
-                        {boleto.status === 'overdue' && <AlertTriangle className="w-3 h-3 text-rose-400" />}
-                        {boleto.status === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
+                        {isDueOverdue && <AlertTriangle className="w-3 h-3 text-red-400" />}
+                        {!isDueOverdue && boleto.status === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
                         <span>
-                          {boleto.status === 'paid' ? 'Pago' : boleto.status === 'overdue' ? 'Em atraso' : 'A vencer'}
+                          {boleto.status === 'paid' ? 'Pago' : isDueOverdue ? 'Em atraso' : 'A vencer'}
                         </span>
                       </motion.span>
                     </AnimatePresence>
 
-                    <span className={`text-xs font-bold ${isDueOverdue ? 'text-rose-300' : 'text-amber-400'}`}>
+                    <span className={`text-xs font-bold ${isDueOverdue ? 'text-red-400 font-extrabold' : 'text-amber-400'}`}>
                       Cliente: {client ? `${client.name} (${client.cpf})` : 'Cliente'}
                     </span>
 
@@ -611,24 +611,24 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                     )}
                   </div>
 
-                  <h4 className={`text-sm font-bold ${isDueOverdue ? 'text-rose-400 font-extrabold' : 'text-white'}`}>
+                  <h4 className={`text-sm font-bold ${isDueOverdue ? 'text-red-500 font-black text-base' : 'text-white'}`}>
                     {boleto.description}
                   </h4>
 
-                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
+                  <div className={`flex flex-wrap items-center gap-4 text-xs ${isDueOverdue ? 'text-red-400' : 'text-slate-400'}`}>
                     <span>
                       Emissão:{' '}
-                      <strong className={`font-semibold ${isDueOverdue ? 'text-rose-300/80' : 'text-amber-300'}`}>
+                      <strong className={`font-semibold ${isDueOverdue ? 'text-red-300 font-bold' : 'text-amber-300'}`}>
                         {new Date(boleto.createdAt).toLocaleDateString('pt-BR')}
                       </strong>
                     </span>
 
                     {/* Due date with interactive edit button */}
                     <span className="inline-flex items-center gap-1.5">
-                      <span className={isDueOverdue ? 'text-rose-400 font-medium' : ''}>Vencimento:</span>{' '}
+                      <span className={isDueOverdue ? 'text-red-400 font-bold' : ''}>Vencimento:</span>{' '}
                       <strong
                         className={`font-bold ${
-                          isDueOverdue ? 'text-rose-400 font-black' : 'text-slate-200'
+                          isDueOverdue ? 'text-red-500 font-black text-sm' : 'text-slate-200'
                         }`}
                       >
                         {formattedDueDate}
@@ -638,19 +638,19 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                         onClick={() => handleOpenDueDateModal(boleto)}
                         className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded-lg transition-all ${
                           isDueOverdue
-                            ? 'bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800'
+                            ? 'bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-700'
                             : 'bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30'
                         }`}
                         title="Alterar Data de Vencimento"
                       >
-                        <Calendar className={`w-3 h-3 ${isDueOverdue ? 'text-rose-400' : 'text-amber-400'}`} />
+                        <Calendar className={`w-3 h-3 ${isDueOverdue ? 'text-red-400' : 'text-amber-400'}`} />
                         <span>Alterar Vencimento</span>
                       </button>
                     </span>
 
                     <span>
-                      <span className={isDueOverdue ? 'text-rose-400 font-medium' : ''}>Valor:</span>{' '}
-                      <strong className={`font-black ${isDueOverdue ? 'text-rose-400' : 'text-white'}`}>
+                      <span className={isDueOverdue ? 'text-red-400 font-bold' : ''}>Valor:</span>{' '}
+                      <strong className={`font-black ${isDueOverdue ? 'text-red-500 font-black text-base' : 'text-white'}`}>
                         {formatCurrency(boleto.amount)}
                       </strong>
                     </span>
@@ -698,8 +698,8 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                               className={`px-3 py-1.5 text-xs font-extrabold rounded-xl border focus:outline-none cursor-pointer transition-all shadow-sm ${
                                 effectiveStatus === 'paid'
                                   ? 'bg-emerald-950 text-emerald-300 border-emerald-800 hover:bg-emerald-900 ring-1 ring-emerald-500/30'
-                                  : effectiveStatus === 'overdue'
-                                  ? 'bg-rose-950 text-rose-300 border-rose-800 hover:bg-rose-900 ring-1 ring-rose-500/30'
+                                  : effectiveStatus === 'overdue' || isDueOverdue
+                                  ? 'bg-red-950 text-red-300 border-red-700 hover:bg-red-900 ring-1 ring-red-500/40 font-black'
                                   : 'bg-amber-950 text-amber-300 border-amber-800 hover:bg-amber-900 ring-1 ring-amber-500/30'
                               }`}
                             >
@@ -709,7 +709,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                               <option value="paid" className="bg-slate-900 text-emerald-300">
                                 Pago
                               </option>
-                              <option value="overdue" className="bg-slate-900 text-rose-300">
+                              <option value="overdue" className="bg-slate-900 text-red-400 font-bold">
                                 Em atraso
                               </option>
                             </select>

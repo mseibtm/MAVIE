@@ -16,6 +16,7 @@ import {
   Clock,
   CheckCircle2,
   Activity,
+  Boxes,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -162,6 +163,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <TrendingUp className="w-4 h-4" />
             <span>Menu Financeiro</span>
+          </button>
+          <button
+            onClick={() => onNavigate('admin-inventory')}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/10 transition-all active:scale-95"
+          >
+            <Boxes className="w-4 h-4" />
+            <span>Estoque</span>
           </button>
           {onOpenEditAdminPassword && (
             <button
