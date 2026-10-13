@@ -34,6 +34,7 @@ import { PDFUploader } from '../common/PDFUploader';
 interface AdminBoletosViewProps {
   clients: Client[];
   boletos: Boleto[];
+  sporadicServices?: SporadicService[];
   monthlyBalances?: MonthlyBalance[];
   expenses?: Expense[];
   initialSelectedClientId?: string;
@@ -51,6 +52,7 @@ interface AdminBoletosViewProps {
 export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   clients,
   boletos,
+  sporadicServices = [],
   monthlyBalances = [],
   expenses = [],
   initialSelectedClientId = '',
@@ -292,13 +294,23 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   const currentBalanceRecord = (monthlyBalances || []).find((b) => b.month === targetMonth) || null;
   const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;
 
-  // Paid inflows for target month (whenever a boleto is paid, it increases account balance)
+  // Paid inflows for target month (boletos quitados e boletos avulsos quitados creditados no saldo)
   const targetPaidBoletosAmount = boletos
     .filter((b) => {
       const d = b.paidAt || b.dueDate || b.createdAt;
       return isBoletoPaid(b) && d && d.startsWith(targetMonth);
     })
     .reduce((sum, b) => sum + b.amount, 0);
+
+  const targetPaidSporadicsAmount = (sporadicServices || [])
+    .filter((s) => {
+      const isPaid = s.status === 'realized' || (s.status as any) === 'paid';
+      const d = s.paidAt || s.date || s.dueDate || s.createdAt;
+      return isPaid && d && d.startsWith(targetMonth);
+    })
+    .reduce((sum, s) => sum + s.amount, 0);
+
+  const targetTotalInflowAmount = targetPaidBoletosAmount + targetPaidSporadicsAmount;
 
   const targetPaidExpensesAmount = (expenses || [])
     .filter((e) => {
@@ -307,7 +319,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     })
     .reduce((sum, e) => sum + e.amount, 0);
 
-  const currentAccountBalance = initialBaseBalance + targetPaidBoletosAmount - targetPaidExpensesAmount;
+  const currentAccountBalance = initialBaseBalance + targetTotalInflowAmount - targetPaidExpensesAmount;
 
   // Global counts for all boletos
   const totalPaidBoletos = boletos.filter((b) => isBoletoPaid(b));
@@ -381,7 +393,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
           <div className="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
             <span className="truncate max-w-[140px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
             <span className="text-emerald-400 font-bold">
-              +{formatCurrency(targetPaidBoletosAmount)} em entradas
+              +{formatCurrency(targetTotalInflowAmount)} em entradas
             </span>
           </div>
         </div>

@@ -100,8 +100,9 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
 
   const targetRealizedSporadics = (sporadicServices || [])
     .filter((s) => {
-      const d = s.dueDate || s.date;
-      return s.status === 'realized' && d && d.startsWith(targetMonth);
+      const isPaid = s.status === 'realized' || (s.status as any) === 'paid';
+      const d = s.paidAt || s.date || s.dueDate || s.createdAt;
+      return isPaid && d && d.startsWith(targetMonth);
     })
     .reduce((sum, s) => sum + s.amount, 0);
 

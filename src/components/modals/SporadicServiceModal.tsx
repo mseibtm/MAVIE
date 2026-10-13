@@ -75,11 +75,18 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
       date: newDate,
       dueDate: newDueDate || newDate,
       status: newStatus,
+      paidAt: newStatus === 'realized' ? new Date().toISOString() : undefined,
       notes: newNotes.trim() || undefined,
       pdfFile: newPdfFile || undefined,
     });
 
-    onToast('success', 'Serviço Registrado!', 'O lançamento do serviço esporádico e boleto foram adicionados com sucesso.');
+    onToast(
+      'success',
+      'Serviço Registrado!',
+      newStatus === 'realized'
+        ? 'O boleto avulso foi registrado como Pago e creditado no valor em caixa.'
+        : 'O lançamento do serviço esporádico e boleto foram adicionados com sucesso.'
+    );
     onClose();
   };
 
@@ -215,8 +222,8 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
                 onChange={(e) => setNewStatus(e.target.value as 'realized' | 'pending')}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500 text-[11px]"
               >
-                <option value="pending">Pendente (A Pagar)</option>
-                <option value="realized">Realizado (Pago)</option>
+                <option value="pending">Pendente (Aguardando Pagamento)</option>
+                <option value="realized">Pago / Quitado (Entra no Caixa)</option>
               </select>
             </div>
           </div>

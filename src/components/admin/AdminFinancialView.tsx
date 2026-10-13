@@ -258,7 +258,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const filteredSporadicServices = sporadicServices.filter((s) => {
     if (!validClientIds.has(s.clientId)) return false;
     if (selectedPeriod === 'all') return true;
-    const d = s.dueDate || s.date;
+    const isPaid = s.status === 'realized' || (s.status as any) === 'paid';
+    const d = isPaid ? (s.paidAt || s.date || s.dueDate || s.createdAt) : (s.dueDate || s.date);
     return d && d.startsWith(selectedPeriod);
   });
 
@@ -266,12 +267,15 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const isBoletoPaid = (b: Boleto) =>
     b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
 
+  const isSporadicPaid = (s: SporadicService) =>
+    s.status === 'realized' || (s.status as any) === 'paid';
+
   const realizedBoletosAmount = filteredBoletos
     .filter((b) => isBoletoPaid(b))
     .reduce((acc, b) => acc + b.amount, 0);
 
   const realizedSporadicAmount = filteredSporadicServices
-    .filter((s) => s.status === 'realized')
+    .filter((s) => isSporadicPaid(s))
     .reduce((acc, s) => acc + s.amount, 0);
 
   // TOTAL FATURAMENTO REALIZADO (Soma das mensalidades quitadas + serviços esporádicos realizados)
@@ -327,8 +331,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
     });
 
     sporadicServices.forEach((s) => {
-      if (s.status === 'realized') {
-        const p = s.date.substring(0, 7);
+      if (isSporadicPaid(s)) {
+        const p = (s.paidAt || s.date || s.dueDate || s.createdAt).substring(0, 7);
         if (monthlyMap[p]) {
           monthlyMap[p].esporadicos += s.amount;
           monthlyMap[p].total += s.amount;
@@ -1499,8 +1503,9 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
             .reduce((sum, b) => sum + b.amount, 0) +
           sporadicServices
             .filter((s) => {
-              const d = s.dueDate || s.date;
-              return s.status === 'realized' && d && d.startsWith(targetBalanceMonth);
+              const isPaid = isSporadicPaid(s);
+              const d = isPaid ? (s.paidAt || s.date || s.dueDate || s.createdAt) : (s.dueDate || s.date);
+              return isPaid && d && d.startsWith(targetBalanceMonth);
             })
             .reduce((sum, s) => sum + s.amount, 0);
 

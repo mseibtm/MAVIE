@@ -182,8 +182,9 @@ export default function App() {
       }
     });
     currentSporadics.forEach((s) => {
-      if (s.status === 'realized') {
-        const m = (s.dueDate || s.date)?.substring(0, 7);
+      const isPaid = s.status === 'realized' || (s.status as any) === 'paid';
+      if (isPaid) {
+        const m = (s.paidAt || s.date || s.dueDate || s.createdAt)?.substring(0, 7);
         if (m) {
           paidInflowByMonth.set(m, (paidInflowByMonth.get(m) || 0) + s.amount);
         }
@@ -564,22 +565,53 @@ export default function App() {
 
   // Sporadic Services Handlers
   const handleAddSporadicService = (serviceData: Omit<SporadicService, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
+    const isPaid = serviceData.status === 'realized' || (serviceData.status as any) === 'paid';
     const newService: SporadicService = {
       ...serviceData,
       id: `sp-${Date.now()}`,
-      createdAt: new Date().toISOString(),
+      paidAt: isPaid ? (serviceData.paidAt || now) : undefined,
+      createdAt: now,
     };
     setSporadicServices((prev) => {
       const updated = [newService, ...prev];
       saveStoredSporadicServices(updated);
+
+      // CRITICAL: Immediately update monthly balance so any sporadic boleto launched as "Pago" enters "valor em caixa"
+      setMonthlyBalances((prevBalances) => {
+        const synced = syncMonthlyBalances(expenses, boletos, prevBalances, updated);
+        saveStoredMonthlyBalances(synced);
+        return synced;
+      });
+
       return updated;
     });
     saveSporadicServiceToFirestore(newService);
+
+    if (isPaid) {
+      const valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newService.amount);
+      addToast(
+        'success',
+        'Boleto Avulso Lançado como Pago',
+        `Serviço esporádico "${newService.description}" lançado como Pago! O valor de ${valStr} foi creditado no valor em caixa.`
+      );
+    }
   };
 
   const handleUpdateSporadicStatus = (id: string, status: 'realized' | 'pending') => {
+    const now = new Date().toISOString();
+    const isPaid = status === 'realized' || (status as any) === 'paid';
     setSporadicServices((prev) => {
-      const updated = prev.map((s) => (s.id === id ? { ...s, status } : s));
+      const updated = prev.map((s) => {
+        if (s.id === id) {
+          return {
+            ...s,
+            status,
+            paidAt: isPaid ? (s.paidAt || now) : undefined,
+          };
+        }
+        return s;
+      });
       saveStoredSporadicServices(updated);
       const item = updated.find((s) => s.id === id);
       if (item) saveSporadicServiceToFirestore(item);
@@ -590,21 +622,55 @@ export default function App() {
         return syncedBalances;
       });
 
+      if (item) {
+        const valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.amount);
+        if (isPaid) {
+          addToast(
+            'success',
+            'Boleto Avulso Liquidado',
+            `Serviço "${item.description}" lançado como Pago! O valor de ${valStr} foi creditado no valor em caixa.`
+          );
+        } else {
+          addToast(
+            'info',
+            'Boleto Avulso Pendente',
+            `Serviço "${item.description}" retornado para Pendente. O valor de ${valStr} foi estornado do valor em caixa.`
+          );
+        }
+      }
+
       return updated;
     });
   };
 
   const handleDeleteSporadicService = (id: string) => {
+    const itemToDelete = sporadicServices.find((s) => s.id === id);
     setSporadicServices((prev) => {
       const updated = prev.filter((s) => s.id !== id);
       saveStoredSporadicServices(updated);
+
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, boletos, prevBalances, updated);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
+
       return updated;
     });
     deleteSporadicServiceFromFirestore(id);
+    if (itemToDelete && (itemToDelete.status === 'realized' || (itemToDelete.status as any) === 'paid')) {
+      const valStr = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(itemToDelete.amount);
+      addToast(
+        'info',
+        'Boleto Avulso Removido',
+        `Serviço esporádico excluído. O valor de ${valStr} foi deduzido do valor em caixa.`
+      );
+    }
   };
 
   const handleUploadSporadicReceipt = (serviceId: string, receipt: PDFAttachment) => {
     let updatedItem: SporadicService | undefined;
+    const now = new Date().toISOString();
     setSporadicServices((prev) => {
       const updated = prev.map((s) => {
         if (s.id === serviceId) {
@@ -612,6 +678,7 @@ export default function App() {
             ...s,
             paymentReceipt: receipt,
             status: 'realized',
+            paidAt: s.paidAt || now,
           };
           updatedItem = item;
           return item;
@@ -619,6 +686,13 @@ export default function App() {
         return s;
       });
       saveStoredSporadicServices(updated);
+
+      setMonthlyBalances((prevBalances) => {
+        const syncedBalances = syncMonthlyBalances(expenses, boletos, prevBalances, updated);
+        saveStoredMonthlyBalances(syncedBalances);
+        return syncedBalances;
+      });
+
       return updated;
     });
 
@@ -1219,14 +1293,16 @@ export default function App() {
 
     const paidInflowInMonth = boletos
       .filter((b) => {
-        const m = (b.dueDate || b.paidAt || b.createdAt)?.substring(0, 7);
+        if (b.id === 'bol-248' || b.id.includes('248')) return false;
+        const m = (b.paidAt || b.dueDate || b.createdAt)?.substring(0, 7);
         return m === balance.month && b.status === 'paid';
       })
       .reduce((sum, b) => sum + b.amount, 0) +
       sporadicServices
         .filter((s) => {
-          const m = (s.dueDate || s.date)?.substring(0, 7);
-          return m === balance.month && s.status === 'realized';
+          const isPaid = s.status === 'realized' || (s.status as any) === 'paid';
+          const m = (s.paidAt || s.date || s.dueDate || s.createdAt)?.substring(0, 7);
+          return m === balance.month && isPaid;
         })
         .reduce((sum, s) => sum + s.amount, 0);
 
@@ -1633,6 +1709,7 @@ export default function App() {
               <AdminBoletosView
                 clients={clients}
                 boletos={boletos}
+                sporadicServices={sporadicServices}
                 monthlyBalances={monthlyBalances}
                 expenses={expenses}
                 initialSelectedClientId={adminClientFilter}

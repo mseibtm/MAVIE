@@ -105,14 +105,16 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
   const totalMensalidadesGerais = totalMensalidadesRealizadas + totalMensalidadesPrevistasAReceber;
 
   // Filter Sporadic Services by target month
+  const isSporadicPaid = (s: SporadicService) => s.status === 'realized' || (s.status as any) === 'paid';
   const targetSporadics = sporadicServices.filter((s) => {
     if (!validClientMap.has(s.clientId)) return false;
-    const d = s.dueDate || s.date;
+    const isPaid = isSporadicPaid(s);
+    const d = isPaid ? (s.paidAt || s.date || s.dueDate || s.createdAt) : (s.dueDate || s.date);
     return d && d.startsWith(targetMonth);
   });
 
-  const realizedSporadics = targetSporadics.filter((s) => s.status === 'realized');
-  const pendingSporadics = targetSporadics.filter((s) => s.status === 'pending');
+  const realizedSporadics = targetSporadics.filter((s) => isSporadicPaid(s));
+  const pendingSporadics = targetSporadics.filter((s) => !isSporadicPaid(s));
 
   const realizedSporadicAmount = realizedSporadics.reduce((acc, s) => acc + s.amount, 0);
   const pendingSporadicAmount = pendingSporadics.reduce((acc, s) => acc + s.amount, 0);
@@ -180,10 +182,10 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
 
       // Sporadics
       const sRealized = sporadicServices
-        .filter((s) => validClientMap.has(s.clientId) && s.status === 'realized' && (s.dueDate || s.date).startsWith(p))
+        .filter((s) => validClientMap.has(s.clientId) && isSporadicPaid(s) && (s.paidAt || s.date || s.dueDate || s.createdAt).startsWith(p))
         .reduce((sum, s) => sum + s.amount, 0);
       const sPending = sporadicServices
-        .filter((s) => validClientMap.has(s.clientId) && s.status === 'pending' && (s.dueDate || s.date).startsWith(p))
+        .filter((s) => validClientMap.has(s.clientId) && !isSporadicPaid(s) && (s.dueDate || s.date).startsWith(p))
         .reduce((sum, s) => sum + s.amount, 0);
 
       // Expenses
