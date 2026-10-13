@@ -40,6 +40,7 @@ interface AdminInventoryViewProps {
   onUpdateDevice: (device: InventoryItem) => void;
   onDeleteDevice: (deviceId: string) => void;
   onStockMovement: (movement: Omit<StockMovement, 'id' | 'timestamp'>) => void;
+  onClearAllInventory?: () => void;
   onToast: (type: 'success' | 'error' | 'info', title: string, desc?: string) => void;
 }
 
@@ -62,8 +63,10 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
   onUpdateDevice,
   onDeleteDevice,
   onStockMovement,
+  onClearAllInventory,
   onToast,
 }) => {
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   // Modal states
   const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
   const [editingDevice, setEditingDevice] = useState<InventoryItem | null>(null);
@@ -123,12 +126,20 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
   });
 
   const openExitModal = (item?: InventoryItem) => {
+    if (inventoryItems.length === 0) {
+      onToast('info', 'Estoque Vazio', 'Cadastre ao menos um dispositivo antes de realizar baixa de volume.');
+      return;
+    }
     setMovementTargetItem(item || null);
     setMovementType('exit');
     setIsMovementModalOpen(true);
   };
 
   const openEntryModal = (item?: InventoryItem) => {
+    if (inventoryItems.length === 0) {
+      onToast('info', 'Estoque Vazio', 'Cadastre ao menos um dispositivo antes de adicionar volume de estoque.');
+      return;
+    }
     setMovementTargetItem(item || null);
     setMovementType('entry');
     setIsMovementModalOpen(true);
@@ -187,6 +198,17 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
             <ArrowDownRight className="w-4 h-4 text-rose-400" />
             <span>- Dar Baixa de Volume</span>
           </button>
+
+          {inventoryItems.length > 0 && onClearAllInventory && (
+            <button
+              onClick={() => setIsClearConfirmOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-300 font-bold text-xs rounded-xl border border-slate-700 hover:border-rose-700/60 transition-all shadow-sm active:scale-95 cursor-pointer"
+              title="Limpar todos os itens do estoque"
+            >
+              <Trash2 className="w-4 h-4 text-slate-500 hover:text-rose-400" />
+              <span>Limpar Estoque</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -422,7 +444,30 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
       </div>
 
       {/* ITEMS LISTING (GRID OR TABLE) */}
-      {filteredItems.length === 0 ? (
+      {inventoryItems.length === 0 ? (
+        <div className="text-center py-20 bg-slate-900/90 border border-slate-800 rounded-3xl p-8 max-w-2xl mx-auto shadow-2xl">
+          <div className="w-16 h-16 mx-auto mb-4 bg-indigo-950/70 border border-indigo-800/70 rounded-2xl flex items-center justify-center text-indigo-400 shadow-inner">
+            <Boxes className="w-8 h-8" />
+          </div>
+          <h3 className="text-xl font-black text-white">Estoque Limpo e Vazio</h3>
+          <p className="text-xs text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+            Nenhum dispositivo físico cadastrado no estoque no momento.
+            Você pode cadastrar novos equipamentos manualmente clicando no botão abaixo.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={() => {
+                setEditingDevice(null);
+                setIsAddDeviceModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Adicionar Manualmente</span>
+            </button>
+          </div>
+        </div>
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-16 bg-slate-900 border border-slate-800 rounded-2xl p-8">
           <Boxes className="w-12 h-12 text-slate-600 mx-auto mb-3" />
           <h3 className="text-base font-bold text-slate-300">Nenhum dispositivo encontrado</h3>
@@ -993,6 +1038,47 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-md shadow-rose-900/30 cursor-pointer"
               >
                 Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM CLEAR ALL INVENTORY MODAL */}
+      {isClearConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-rose-800/60 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-950/80 border border-rose-800/80 rounded-xl text-rose-400">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-white text-base">Limpar Todo o Estoque?</h3>
+                <p className="text-xs text-rose-300">Esta ação apagará todos os dispositivos cadastrados</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Tem certeza de que deseja limpar todos os itens do estoque? Todos os dispositivos físicos e seus saldos serão removidos do almoxarifado.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearConfirmOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClearConfirmOpen(false);
+                  if (onClearAllInventory) {
+                    onClearAllInventory();
+                  }
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 cursor-pointer"
+              >
+                Sim, Limpar Estoque
               </button>
             </div>
           </div>

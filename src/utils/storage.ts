@@ -334,13 +334,13 @@ export const saveStoredMonthlyBalances = (balances: MonthlyBalance[]) => {
 export const getStoredInventoryItems = (): InventoryItem[] => {
   const data = localStorage.getItem(KEYS.INVENTORY);
   if (!data) {
-    return INITIAL_INVENTORY_ITEMS;
+    return [];
   }
   try {
     const list: InventoryItem[] = JSON.parse(data);
-    return Array.isArray(list) && list.length > 0 ? list : INITIAL_INVENTORY_ITEMS;
+    return Array.isArray(list) ? list : [];
   } catch {
-    return INITIAL_INVENTORY_ITEMS;
+    return [];
   }
 };
 
@@ -348,21 +348,29 @@ export const saveStoredInventoryItems = (items: InventoryItem[]) => {
   safeSetItem(KEYS.INVENTORY, items);
 };
 
+export const clearStoredInventoryItems = () => {
+  safeSetItem(KEYS.INVENTORY, []);
+};
+
 export const getStoredStockMovements = (): StockMovement[] => {
   const data = localStorage.getItem(KEYS.STOCK_MOVEMENTS);
   if (!data) {
-    return INITIAL_STOCK_MOVEMENTS;
+    return [];
   }
   try {
     const list: StockMovement[] = JSON.parse(data);
-    return Array.isArray(list) && list.length > 0 ? list : INITIAL_STOCK_MOVEMENTS;
+    return Array.isArray(list) ? list : [];
   } catch {
-    return INITIAL_STOCK_MOVEMENTS;
+    return [];
   }
 };
 
 export const saveStoredStockMovements = (movements: StockMovement[]) => {
   safeSetItem(KEYS.STOCK_MOVEMENTS, movements);
+};
+
+export const clearStoredStockMovements = () => {
+  safeSetItem(KEYS.STOCK_MOVEMENTS, []);
 };
 
 export const resetToInitialData = () => {

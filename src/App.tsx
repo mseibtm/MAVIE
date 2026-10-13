@@ -266,7 +266,13 @@ export default function App() {
     setSporadicServices(loadedSporadics);
     setExpenses(loadedExpenses);
     setMonthlyBalances(syncedInitialBalances);
-    saveStoredMonthlyBalances(syncedInitialBalances);
+    // Reset mock inventory items on mount so inventory is clean (0 items)
+    const inventoryClearedFlag = localStorage.getItem('mavie_inventory_cleared_v2');
+    if (!inventoryClearedFlag) {
+      saveStoredInventoryItems([]);
+      saveStoredStockMovements([]);
+      localStorage.setItem('mavie_inventory_cleared_v2', 'true');
+    }
     const loadedInventory = getStoredInventoryItems();
     const loadedStockMovements = getStoredStockMovements();
     setInventoryItems(loadedInventory);
@@ -497,16 +503,30 @@ export default function App() {
       });
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
       const unsubInventory = subscribeInventory((remoteInventory) => {
-        if (remoteInventory && remoteInventory.length > 0) {
-          setInventoryItems(remoteInventory);
-          saveStoredInventoryItems(remoteInventory);
+        if (!remoteInventory) return;
+        // Clean any legacy mock items from Firestore if found
+        const mockDevs = remoteInventory.filter((i) => i.id.startsWith('dev-'));
+        if (mockDevs.length > 0) {
+          mockDevs.forEach((m) => deleteInventoryItemFromFirestore(m.id));
+          const cleaned = remoteInventory.filter((i) => !i.id.startsWith('dev-'));
+          setInventoryItems(cleaned);
+          saveStoredInventoryItems(cleaned);
+          return;
         }
+        setInventoryItems(remoteInventory);
+        saveStoredInventoryItems(remoteInventory);
       });
       const unsubStockMovements = subscribeStockMovements((remoteMovements) => {
-        if (remoteMovements && remoteMovements.length > 0) {
-          setStockMovements(remoteMovements);
-          saveStoredStockMovements(remoteMovements);
+        if (!remoteMovements) return;
+        const mockMovs = remoteMovements.filter((m) => m.id.startsWith('mov-1') || m.id.startsWith('mov-2') || m.id.startsWith('mov-3') || m.id.startsWith('mov-4') || m.id.startsWith('mov-5'));
+        if (mockMovs.length > 0) {
+          const cleaned = remoteMovements.filter((m) => !mockMovs.some((x) => x.id === m.id));
+          setStockMovements(cleaned);
+          saveStoredStockMovements(cleaned);
+          return;
         }
+        setStockMovements(remoteMovements);
+        saveStoredStockMovements(remoteMovements);
       });
 
       return () => {
@@ -1572,6 +1592,19 @@ export default function App() {
     }
   };
 
+  const handleClearAllInventory = () => {
+    // Delete all inventory items from Firestore
+    inventoryItems.forEach((item) => {
+      deleteInventoryItemFromFirestore(item.id);
+    });
+    setInventoryItems([]);
+    saveStoredInventoryItems([]);
+    setStockMovements([]);
+    saveStoredStockMovements([]);
+    localStorage.setItem('mavie_inventory_cleared_v2', 'true');
+    addToast('info', 'Estoque Limpo', 'Todos os itens do estoque foram removidos.');
+  };
+
   return (
     <div className="min-h-screen bg-black text-slate-100 font-sans selection:bg-amber-500 selection:text-black flex flex-col">
       <Header
@@ -1756,6 +1789,7 @@ export default function App() {
                 onUpdateDevice={handleUpdateDevice}
                 onDeleteDevice={handleDeleteDevice}
                 onStockMovement={handleStockMovement}
+                onClearAllInventory={handleClearAllInventory}
                 onToast={addToast}
               />
             )}
