@@ -518,3 +518,12 @@ export async function saveStockMovementToFirestore(movement: StockMovement) {
   }
 }
 
+export async function deleteStockMovementFromFirestore(id: string) {
+  try {
+    await deleteDoc(doc(db, COLS.STOCK_MOVEMENTS, id));
+  } catch (err) {
+    console.error('Error deleting stock movement from Firestore:', err);
+  }
+}
+
+

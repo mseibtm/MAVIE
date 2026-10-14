@@ -59,6 +59,7 @@ import {
   deleteInventoryItemFromFirestore,
   subscribeStockMovements,
   saveStockMovementToFirestore,
+  deleteStockMovementFromFirestore,
   saveNotificationToFirestore,
   deleteNotificationFromFirestore,
   saveAdminPasswordToFirestore
@@ -265,14 +266,7 @@ export default function App() {
     const syncedInitialBalances = syncMonthlyBalances(loadedExpenses, syncedBoletos, loadedBalances, loadedSporadics);
     setSporadicServices(loadedSporadics);
     setExpenses(loadedExpenses);
-    setMonthlyBalances(syncedInitialBalances);
-    // Reset mock inventory items on mount so inventory is clean (0 items)
-    const inventoryClearedFlag = localStorage.getItem('mavie_inventory_cleared_v2');
-    if (!inventoryClearedFlag) {
-      saveStoredInventoryItems([]);
-      saveStoredStockMovements([]);
-      localStorage.setItem('mavie_inventory_cleared_v2', 'true');
-    }
+    saveStoredMonthlyBalances(syncedInitialBalances);
     const loadedInventory = getStoredInventoryItems();
     const loadedStockMovements = getStoredStockMovements();
     setInventoryItems(loadedInventory);
@@ -291,113 +285,85 @@ export default function App() {
     // 2. Seed Firestore if empty, then listen to realtime updates
     seedFirestoreIfEmpty().then(() => {
       const unsubClients = subscribeClients((cl) => {
-        setClients(cl);
-        saveStoredClients(cl);
-
         if (cl && cl.length > 0) {
-          const validIds = new Set(cl.map((c) => c.id));
-          setBoletos((prev) => {
-            const orphans = prev.filter(
-              (b) =>
-                !validIds.has(b.clientId) ||
-                b.id === 'bol-101' ||
-                b.id === 'bol-102' ||
-                b.id === 'bol-201' ||
-                b.id === 'bol-301'
-            );
-            if (orphans.length > 0) {
-              orphans.forEach((b) => deleteBoletoFromFirestore(b.id));
-              const validBoletos = prev.filter(
-                (b) =>
-                  validIds.has(b.clientId) &&
-                  b.id !== 'bol-101' &&
-                  b.id !== 'bol-102' &&
-                  b.id !== 'bol-201' &&
-                  b.id !== 'bol-301'
-              );
-              saveStoredBoletos(validBoletos);
-              return validBoletos;
-            }
-            return prev;
-          });
+          setClients(cl);
+          saveStoredClients(cl);
+        } else {
+          const localClients = getStoredClients();
+          if (localClients.length > 0) {
+            localClients.forEach((c) => saveClientToFirestore(c));
+            setClients(localClients);
+          }
         }
       });
       const unsubBoletos = subscribeBoletos((remoteBoletos) => {
-        setBoletos((prevLocal) => {
-          const localMap = new Map<string, Boleto>(prevLocal.map((b) => [b.id, b]));
-          const currentClients = getStoredClients();
-          const validClientIds = new Set(currentClients.map((c) => c.id));
+        const MOCK_BOLETO_IDS = new Set(['bol-101', 'bol-102', 'bol-201', 'bol-301']);
+        const cleanedRemote = (remoteBoletos || []).filter((rb) => !MOCK_BOLETO_IDS.has(rb.id));
 
-          // Filter out mock boletos or orphans without a client
-          const cleanedRemote = remoteBoletos.filter((rb) => {
-            const isMock =
-              rb.id === 'bol-101' ||
-              rb.id === 'bol-102' ||
-              rb.id === 'bol-201' ||
-              rb.id === 'bol-301' ||
-              rb.clientId === 'cli-1' ||
-              rb.clientId === 'cli-2' ||
-              rb.clientId === 'cli-3';
-            const isOrphan = currentClients.length > 0 && !validClientIds.has(rb.clientId);
-            if (isMock || isOrphan) {
-              deleteBoletoFromFirestore(rb.id);
-              return false;
-            }
-            return true;
-          });
+        if (cleanedRemote.length > 0) {
+          setBoletos((prevLocal) => {
+            const localMap = new Map<string, Boleto>(prevLocal.map((b) => [b.id, b]));
 
-          const mergedRemote = cleanedRemote.map((rb) => {
-            const lb = localMap.get(rb.id);
+            const mergedRemote = cleanedRemote.map((rb) => {
+              const lb = localMap.get(rb.id);
 
-            // CRITICAL: Protect #bol-248 from ever being marked as paid
-            if (rb.id === 'bol-248' || rb.id.includes('248')) {
-              const now = new Date();
-              const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-              const correctedStatus: BoletoStatus = rb.dueDate < todayStr ? 'overdue' : 'pending';
-              if (rb.status === 'paid' || rb.paidAt || rb.paymentReceipt) {
-                updateBoletoStatusInFirestore(rb.id, correctedStatus, undefined);
-                removeBoletoReceiptFromFirestore(rb.id);
+              // CRITICAL: Protect #bol-248 from ever being marked as paid
+              if (rb.id === 'bol-248' || rb.id.includes('248')) {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                const correctedStatus: BoletoStatus = rb.dueDate < todayStr ? 'overdue' : 'pending';
+                if (rb.status === 'paid' || rb.paidAt || rb.paymentReceipt) {
+                  updateBoletoStatusInFirestore(rb.id, correctedStatus, undefined);
+                  removeBoletoReceiptFromFirestore(rb.id);
+                }
+                return {
+                  ...rb,
+                  status: correctedStatus,
+                  paidAt: undefined,
+                  paymentReceipt: undefined,
+                  pdfFile: lb?.pdfFile || rb.pdfFile,
+                };
               }
+
+              // Normal boleto resolution: respect rb.status, never force 'paid'
+              const resolvedStatus: BoletoStatus = rb.status;
+              const resolvedPaidAt = resolvedStatus === 'paid' ? (rb.paidAt || lb?.paidAt || new Date().toISOString()) : undefined;
+
+              const resolvedPdf = (lb?.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_'))
+                ? lb.pdfFile
+                : (rb.pdfFile || lb?.pdfFile);
+
+              const resolvedReceipt = (lb?.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_'))
+                ? lb.paymentReceipt
+                : (rb.paymentReceipt || lb?.paymentReceipt);
+
               return {
                 ...rb,
-                status: correctedStatus,
-                paidAt: undefined,
-                paymentReceipt: undefined,
-                pdfFile: lb?.pdfFile || rb.pdfFile,
+                status: resolvedStatus,
+                paidAt: resolvedPaidAt,
+                pdfFile: resolvedPdf,
+                paymentReceipt: resolvedReceipt,
               };
-            }
+            });
 
-            // Normal boleto resolution: respect rb.status, never force 'paid'
-            const resolvedStatus: BoletoStatus = rb.status;
-            const resolvedPaidAt = resolvedStatus === 'paid' ? (rb.paidAt || lb?.paidAt || new Date().toISOString()) : undefined;
-
-            const resolvedPdf = (lb?.pdfFile?.dataUrl && !lb.pdfFile.dataUrl.includes('[large_'))
-              ? lb.pdfFile
-              : (rb.pdfFile || lb?.pdfFile);
-
-            const resolvedReceipt = (lb?.paymentReceipt?.dataUrl && !lb.paymentReceipt.dataUrl.includes('[large_'))
-              ? lb.paymentReceipt
-              : (rb.paymentReceipt || lb?.paymentReceipt);
-
-            return {
-              ...rb,
-              status: resolvedStatus,
-              paidAt: resolvedPaidAt,
-              pdfFile: resolvedPdf,
-              paymentReceipt: resolvedReceipt,
-            };
+            const syncedRemote = syncAndSaveBoletoStatuses(mergedRemote);
+            saveStoredBoletos(syncedRemote);
+            setMonthlyBalances((prevBalances) => {
+              const synced = syncMonthlyBalances(expenses, syncedRemote, prevBalances, sporadicServices);
+              saveStoredMonthlyBalances(synced);
+              return synced;
+            });
+            return syncedRemote;
           });
-
-          const syncedRemote = syncAndSaveBoletoStatuses(mergedRemote);
-          saveStoredBoletos(syncedRemote);
-          setMonthlyBalances((prevBalances) => {
-            const synced = syncMonthlyBalances(expenses, syncedRemote, prevBalances, sporadicServices);
-            saveStoredMonthlyBalances(synced);
-            return synced;
-          });
-          return syncedRemote;
-        });
+        } else {
+          const localBoletos = getStoredBoletos().filter((b) => !MOCK_BOLETO_IDS.has(b.id));
+          if (localBoletos.length > 0) {
+            localBoletos.forEach((b) => saveBoletoToFirestore(b));
+            setBoletos(localBoletos);
+          }
+        }
       });
+
       const unsubNfes = subscribeNFes((remoteNfes) => {
         setNfes((prevLocal) => {
           const localMap = new Map<string, NotaFiscal>(prevLocal.map((n) => [n.id, n]));
@@ -504,29 +470,42 @@ export default function App() {
       const unsubAdminPass = subscribeAdminPassword((pass) => setAdminPassword(pass));
       const unsubInventory = subscribeInventory((remoteInventory) => {
         if (!remoteInventory) return;
-        // Clean any legacy mock items from Firestore if found
-        const mockDevs = remoteInventory.filter((i) => i.id.startsWith('dev-'));
-        if (mockDevs.length > 0) {
-          mockDevs.forEach((m) => deleteInventoryItemFromFirestore(m.id));
-          const cleaned = remoteInventory.filter((i) => !i.id.startsWith('dev-'));
-          setInventoryItems(cleaned);
-          saveStoredInventoryItems(cleaned);
-          return;
+        const LEGACY_MOCK_DEV_IDS = new Set(['dev-1', 'dev-2', 'dev-3', 'dev-4', 'dev-5', 'dev-6', 'dev-7', 'dev-8', 'dev-9', 'dev-10']);
+        const cleanedRemote = remoteInventory.filter((item) => !LEGACY_MOCK_DEV_IDS.has(item.id));
+
+        if (cleanedRemote.length > 0) {
+          setInventoryItems(cleanedRemote);
+          saveStoredInventoryItems(cleanedRemote);
+        } else {
+          // If remote is empty, preserve and sync local user-added items to Firestore
+          const localItems = getStoredInventoryItems().filter((item) => !LEGACY_MOCK_DEV_IDS.has(item.id));
+          if (localItems.length > 0) {
+            localItems.forEach((item) => saveInventoryItemToFirestore(item));
+            setInventoryItems(localItems);
+          } else {
+            setInventoryItems([]);
+            saveStoredInventoryItems([]);
+          }
         }
-        setInventoryItems(remoteInventory);
-        saveStoredInventoryItems(remoteInventory);
       });
       const unsubStockMovements = subscribeStockMovements((remoteMovements) => {
         if (!remoteMovements) return;
-        const mockMovs = remoteMovements.filter((m) => m.id.startsWith('mov-1') || m.id.startsWith('mov-2') || m.id.startsWith('mov-3') || m.id.startsWith('mov-4') || m.id.startsWith('mov-5'));
-        if (mockMovs.length > 0) {
-          const cleaned = remoteMovements.filter((m) => !mockMovs.some((x) => x.id === m.id));
-          setStockMovements(cleaned);
-          saveStoredStockMovements(cleaned);
-          return;
+        const LEGACY_MOCK_MOV_IDS = new Set(['mov-1', 'mov-2', 'mov-3', 'mov-4', 'mov-5']);
+        const cleanedRemote = remoteMovements.filter((m) => !LEGACY_MOCK_MOV_IDS.has(m.id));
+
+        if (cleanedRemote.length > 0) {
+          setStockMovements(cleanedRemote);
+          saveStoredStockMovements(cleanedRemote);
+        } else {
+          const localMovs = getStoredStockMovements().filter((m) => !LEGACY_MOCK_MOV_IDS.has(m.id));
+          if (localMovs.length > 0) {
+            localMovs.forEach((m) => saveStockMovementToFirestore(m));
+            setStockMovements(localMovs);
+          } else {
+            setStockMovements([]);
+            saveStoredStockMovements([]);
+          }
         }
-        setStockMovements(remoteMovements);
-        saveStoredStockMovements(remoteMovements);
       });
 
       return () => {
@@ -895,7 +874,7 @@ export default function App() {
     const newBoleto: Boleto = {
       ...newBoletoData,
       status: initialStatus,
-      id: `bol-${Math.floor(100 + Math.random() * 900)}`,
+      id: `bol-${Date.now()}`,
       createdAt: new Date().toISOString(),
     };
     setBoletos((prev) => {
@@ -1467,7 +1446,7 @@ export default function App() {
       qty === 0 ? 'out_of_stock' : qty <= minQty ? 'low_stock' : 'available';
 
     const newDevice: InventoryItem = {
-      id: deviceData.id || `dev-${Date.now()}`,
+      id: deviceData.id || `item-${Date.now()}`,
       ...deviceData,
       quantity: qty,
       minQuantity: minQty,
@@ -1485,7 +1464,7 @@ export default function App() {
 
     if (qty > 0) {
       const entryMovement: StockMovement = {
-        id: `mov-${Date.now()}`,
+        id: `mov-entry-${Date.now()}`,
         itemId: newDevice.id,
         itemName: newDevice.name,
         type: 'entry',
@@ -1597,11 +1576,13 @@ export default function App() {
     inventoryItems.forEach((item) => {
       deleteInventoryItemFromFirestore(item.id);
     });
+    stockMovements.forEach((movement) => {
+      deleteStockMovementFromFirestore(movement.id);
+    });
     setInventoryItems([]);
     saveStoredInventoryItems([]);
     setStockMovements([]);
     saveStoredStockMovements([]);
-    localStorage.setItem('mavie_inventory_cleared_v2', 'true');
     addToast('info', 'Estoque Limpo', 'Todos os itens do estoque foram removidos.');
   };
 

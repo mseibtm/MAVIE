@@ -160,6 +160,7 @@ export interface MonthlyBalance {
 }
 
 export type DeviceCategory =
+  | 'produto_equipamento'
   | 'rastreador'
   | 'sensor'
   | 'bloqueador'

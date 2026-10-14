@@ -161,6 +161,7 @@ export const SporadicServiceModal: React.FC<SporadicServiceModalProps> = ({
                 onChange={(e) => setNewCategory(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
               >
+                <option value="Produto / Equipamento">Produto / Equipamento</option>
                 <option value="Serviço Avulso">Serviço Avulso</option>
                 <option value="Consultoria">Consultoria</option>
                 <option value="Treinamento">Treinamento</option>

@@ -11,6 +11,7 @@ interface AddDeviceModalProps {
 }
 
 const CATEGORIES: { value: DeviceCategory; label: string; icon: string }[] = [
+  { value: 'produto_equipamento', label: 'Produto / Equipamento', icon: '📦' },
   { value: 'rastreador', label: 'Rastreador Veicular / GPS', icon: '🛰️' },
   { value: 'sensor', label: 'Sensor (Temperatura, Porta, etc.)', icon: '📡' },
   { value: 'bloqueador', label: 'Bloqueador / Relé', icon: '🔒' },
