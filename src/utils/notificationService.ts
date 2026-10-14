@@ -149,7 +149,7 @@ export function cleanupOrphanNotifications(
       }
 
       // If boleto is paid, purge any overdue or due date alerts for it
-      const isPaid = boleto.id !== 'bol-248' && boleto.status === 'paid';
+      const isPaid = boleto.status === 'paid';
       if (isPaid && (n.type === 'overdue' || n.type === 'due_date')) {
         orphanIds.push(n.id);
         continue;
@@ -203,7 +203,7 @@ export function checkAndNotifyDueBoletos(
 
   boletos.forEach((boleto) => {
     // Only check unpaid boletos for valid existing clients
-    const isPaid = boleto.id !== 'bol-248' && boleto.status === 'paid';
+    const isPaid = boleto.status === 'paid';
     if (isPaid || !validClientIds.has(boleto.clientId)) return;
 
     const formattedAmount = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boleto.amount);
@@ -308,22 +308,6 @@ export function syncBoletoStatuses(boletos: Boleto[]): { updatedBoletos: Boleto[
 
   const changedBoletos: Boleto[] = [];
   const updatedBoletos = boletos.map((b) => {
-    // CRITICAL: Protect #bol-248 - user explicitly noted it is NOT paid!
-    if (b.id === 'bol-248' || b.id.includes('248')) {
-      const correctStatus: BoletoStatus = b.dueDate < todayStr ? 'overdue' : 'pending';
-      if (b.status === 'paid' || b.paidAt || b.paymentReceipt) {
-        const corrected: Boleto = {
-          ...b,
-          status: correctStatus,
-          paidAt: undefined,
-          paymentReceipt: undefined,
-        };
-        changedBoletos.push(corrected);
-        return corrected;
-      }
-      return b;
-    }
-
     // A boleto is paid ONLY if its status is 'paid'
     if (b.status === 'paid') {
       return b;

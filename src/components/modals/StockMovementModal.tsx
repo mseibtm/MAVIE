@@ -45,6 +45,7 @@ export const StockMovementModal: React.FC<StockMovementModalProps> = ({
   const [movementType, setMovementType] = useState<MovementType>(initialType);
   const [selectedItemId, setSelectedItemId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
+  const [unitCostStr, setUnitCostStr] = useState<string>('');
   const [reason, setReason] = useState<string>('Instalação em Cliente');
   const [customReason, setCustomReason] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -53,12 +54,15 @@ export const StockMovementModal: React.FC<StockMovementModalProps> = ({
 
   useEffect(() => {
     setMovementType(initialType);
+    let target = selectedItem;
     if (selectedItem) {
       setSelectedItemId(selectedItem.id);
     } else if (items.length > 0) {
       setSelectedItemId(items[0].id);
+      target = items[0];
     }
     setQuantity(1);
+    setUnitCostStr(target?.unitCost ? String(target.unitCost) : '');
     setReason(initialType === 'exit' ? 'Instalação em Cliente' : 'Compra de Fornecedor / Novo Lote');
     setCustomReason('');
     setSelectedClientId('');
@@ -70,11 +74,20 @@ export const StockMovementModal: React.FC<StockMovementModalProps> = ({
 
   const currentItem = items.find((i) => i.id === selectedItemId) || selectedItem;
   const currentStock = currentItem ? currentItem.quantity : 0;
+  const currentAvgCost = currentItem?.unitCost || 0;
 
   // Real-time calculation of remaining or new stock
   const isExit = movementType === 'exit';
   const remainingStock = isExit ? currentStock - quantity : currentStock + quantity;
   const isOverQuantity = isExit && quantity > currentStock;
+
+  const entryUnitCost = parseFloat(unitCostStr.replace(',', '.')) || 0;
+  const newWeightedAvgCost = entryUnitCost > 0
+    ? (currentStock <= 0 ? entryUnitCost : Number(((currentStock * currentAvgCost + quantity * entryUnitCost) / (currentStock + quantity)).toFixed(2)))
+    : currentAvgCost;
+
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   const handleQuickQuantity = (val: number) => {
     if (isExit && val > currentStock) {
@@ -110,6 +123,8 @@ export const StockMovementModal: React.FC<StockMovementModalProps> = ({
       itemName: currentItem.name,
       type: movementType,
       quantity,
+      unitCost: !isExit && entryUnitCost > 0 ? entryUnitCost : undefined,
+      totalCost: !isExit && entryUnitCost > 0 ? Number((quantity * entryUnitCost).toFixed(2)) : undefined,
       previousQuantity: currentStock,
       newQuantity: remainingStock,
       reason: finalReason,
@@ -340,6 +355,43 @@ export const StockMovementModal: React.FC<StockMovementModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Custo Unitário da Entrada e Preço Médio Ponderado */}
+          {!isExit && (
+            <div className="p-3.5 bg-slate-950/80 border border-emerald-900/50 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-emerald-400 font-bold uppercase tracking-wider text-[10px]">
+                  Custo Unitário Desta Entrada (R$)
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  Preço médio atual: <strong className="text-white font-mono">{formatCurrency(currentAvgCost)}</strong>
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={unitCostStr}
+                  onChange={(e) => setUnitCostStr(e.target.value)}
+                  placeholder={currentAvgCost > 0 ? String(currentAvgCost) : '0,00'}
+                  className="w-full pl-8 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold text-sm focus:ring-2 focus:ring-emerald-500 placeholder-slate-600"
+                />
+                <span className="absolute left-3 top-2 text-xs font-bold text-slate-500">R$</span>
+              </div>
+
+              {entryUnitCost > 0 && (
+                <div className="p-2.5 bg-emerald-950/40 border border-emerald-800/40 rounded-lg text-[11px] space-y-1">
+                  <div className="flex justify-between text-slate-300">
+                    <span>Total do Lote ({quantity} un. x {formatCurrency(entryUnitCost)}):</span>
+                    <span className="font-bold text-white">{formatCurrency(quantity * entryUnitCost)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-300 font-bold pt-1 border-t border-emerald-900/40">
+                    <span>Novo Preço Médio Ponderado Calculado:</span>
+                    <span className="font-mono text-xs text-emerald-400">{formatCurrency(newWeightedAvgCost)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Motivo da Movimentação */}
           <div>

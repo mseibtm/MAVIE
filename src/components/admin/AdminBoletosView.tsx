@@ -257,9 +257,6 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
   };
 
   const getEffectiveStatus = (b: Boleto): BoletoStatus => {
-    if (b.id === 'bol-248' || b.id.includes('248')) {
-      return b.dueDate < todayStr ? 'overdue' : 'pending';
-    }
     return b.status;
   };
 
@@ -288,8 +285,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
 
   // Active Management Month (strictly from October 2026 onwards)
   const targetMonth = '2026-10';
-  const isBoletoPaid = (b: Boleto) =>
-    b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
+  const isBoletoPaid = (b: Boleto) => b.status === 'paid';
 
   const currentBalanceRecord = (monthlyBalances || []).find((b) => b.month === targetMonth) || null;
   const initialBaseBalance = currentBalanceRecord ? currentBalanceRecord.initialBalance : 0;

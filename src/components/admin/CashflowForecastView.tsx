@@ -67,8 +67,14 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
 
   // Format month name in Portuguese
   const formatMonthTitle = (monthStr: string) => {
+    if (!monthStr || typeof monthStr !== 'string' || !monthStr.includes('-')) {
+      return 'Período Geral';
+    }
     const [y, m] = monthStr.split('-');
-    const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+    const yNum = parseInt(y);
+    const mNum = parseInt(m);
+    if (isNaN(yNum) || isNaN(mNum)) return monthStr;
+    const d = new Date(yNum, mNum - 1, 1);
     const formatted = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   };
@@ -88,8 +94,7 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
     return d && d.startsWith(targetMonth);
   });
 
-  const isBoletoPaid = (b: Boleto) =>
-    b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
+  const isBoletoPaid = (b: Boleto) => b.status === 'paid';
 
   const paidBoletos = targetBoletos.filter((b) => isBoletoPaid(b));
   const pendingBoletos = targetBoletos.filter((b) => !isBoletoPaid(b) && b.status !== 'overdue');
@@ -167,34 +172,36 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
     }
     periodsList.sort();
 
-    return periodsList.map((p) => {
+    return periodsList.filter((p) => p && p.includes('-')).map((p) => {
       const [year, month] = p.split('-');
-      const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+      const yNum = parseInt(year);
+      const mNum = parseInt(month);
+      const d = !isNaN(yNum) && !isNaN(mNum) ? new Date(yNum, mNum - 1, 1) : new Date();
       const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
 
       // Boletos paid/pending
       const bPaid = boletos
-        .filter((b) => validClientMap.has(b.clientId) && b.status === 'paid' && (b.paidAt || b.dueDate || b.createdAt).startsWith(p))
-        .reduce((sum, b) => sum + b.amount, 0);
+        .filter((b) => validClientMap.has(b.clientId) && b.status === 'paid' && (b.paidAt || b.dueDate || b.createdAt || '').startsWith(p))
+        .reduce((sum, b) => sum + (b.amount || 0), 0);
       const bPending = boletos
-        .filter((b) => validClientMap.has(b.clientId) && b.status === 'pending' && (b.dueDate || b.createdAt).startsWith(p))
-        .reduce((sum, b) => sum + b.amount, 0);
+        .filter((b) => validClientMap.has(b.clientId) && b.status === 'pending' && (b.dueDate || b.createdAt || '').startsWith(p))
+        .reduce((sum, b) => sum + (b.amount || 0), 0);
 
       // Sporadics
       const sRealized = sporadicServices
-        .filter((s) => validClientMap.has(s.clientId) && isSporadicPaid(s) && (s.paidAt || s.date || s.dueDate || s.createdAt).startsWith(p))
-        .reduce((sum, s) => sum + s.amount, 0);
+        .filter((s) => validClientMap.has(s.clientId) && isSporadicPaid(s) && (s.paidAt || s.date || s.dueDate || s.createdAt || '').startsWith(p))
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
       const sPending = sporadicServices
-        .filter((s) => validClientMap.has(s.clientId) && !isSporadicPaid(s) && (s.dueDate || s.date).startsWith(p))
-        .reduce((sum, s) => sum + s.amount, 0);
+        .filter((s) => validClientMap.has(s.clientId) && !isSporadicPaid(s) && (s.dueDate || s.date || '').startsWith(p))
+        .reduce((sum, s) => sum + (s.amount || 0), 0);
 
       // Expenses
       const expPaid = expenses
-        .filter((e) => e.status === 'paid' && (e.month === p || e.dueDate.startsWith(p)))
-        .reduce((sum, e) => sum + e.amount, 0);
+        .filter((e) => e.status === 'paid' && (e.month === p || (e.dueDate && e.dueDate.startsWith(p))))
+        .reduce((sum, e) => sum + (e.amount || 0), 0);
       const expPending = expenses
-        .filter((e) => e.status === 'pending' && (e.month === p || e.dueDate.startsWith(p)))
-        .reduce((sum, e) => sum + e.amount, 0);
+        .filter((e) => e.status === 'pending' && (e.month === p || (e.dueDate && e.dueDate.startsWith(p))))
+        .reduce((sum, e) => sum + (e.amount || 0), 0);
 
       const totalReceitas = bPaid + bPending + sRealized + sPending;
       const totalDespesas = expPaid + expPending;

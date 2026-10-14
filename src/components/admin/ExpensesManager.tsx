@@ -93,7 +93,7 @@ export const ExpensesManager: React.FC<ExpensesManagerProps> = ({
   const targetPaidBoletos = (boletos || [])
     .filter((b) => {
       const d = b.paidAt || b.dueDate || b.createdAt;
-      const isPaid = b.id !== 'bol-248' && !b.id.includes('248') && b.status === 'paid';
+      const isPaid = b.status === 'paid';
       return isPaid && d && d.startsWith(targetMonth);
     })
     .reduce((sum, b) => sum + b.amount, 0);

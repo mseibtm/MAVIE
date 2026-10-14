@@ -32,9 +32,6 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
   })();
 
   const getEffectiveStatus = (b: Boleto): BoletoStatus => {
-    if (b.id === 'bol-248' || b.id.includes('248')) {
-      return b.dueDate < todayStr ? 'overdue' : 'pending';
-    }
     if (b.status === 'paid') {
       return 'paid';
     }

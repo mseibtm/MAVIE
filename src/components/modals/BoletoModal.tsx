@@ -78,7 +78,7 @@ export const BoletoModal: React.FC<BoletoModalProps> = ({
 
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const isPaid = boleto.id !== 'bol-248' && !boleto.id.includes('248') && boleto.status === 'paid';
+  const isPaid = boleto.status === 'paid';
   const isOverdue = !isPaid && (boleto.status === 'overdue' || boleto.dueDate < todayStr);
 
   const formattedDueDate = new Date(boleto.dueDate + 'T00:00:00').toLocaleDateString('pt-BR');

@@ -193,21 +193,7 @@ export const getStoredBoletos = (): Boleto[] => {
   }
   try {
     const list: Boleto[] = JSON.parse(data);
-    return list
-      .filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId))
-      .map((b) => {
-        if (b.id === 'bol-248' || b.id.includes('248')) {
-          const now = new Date();
-          const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-          return {
-            ...b,
-            status: (b.dueDate < todayStr ? 'overdue' : 'pending') as BoletoStatus,
-            paidAt: undefined,
-            paymentReceipt: undefined,
-          };
-        }
-        return b;
-      });
+    return list.filter((b) => !MOCK_BOLETO_IDS.has(b.id) && !MOCK_CLIENT_IDS.has(b.clientId));
   } catch {
     return [];
   }
