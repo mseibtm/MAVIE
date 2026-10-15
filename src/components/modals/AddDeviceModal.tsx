@@ -11,15 +11,10 @@ interface AddDeviceModalProps {
 }
 
 const CATEGORIES: { value: DeviceCategory; label: string; icon: string }[] = [
-  { value: 'produto_equipamento', label: 'Produto / Equipamento', icon: '📦' },
-  { value: 'rastreador', label: 'Rastreador Veicular / GPS', icon: '🛰️' },
-  { value: 'sensor', label: 'Sensor (Temperatura, Porta, etc.)', icon: '📡' },
-  { value: 'bloqueador', label: 'Bloqueador / Relé', icon: '🔒' },
-  { value: 'camera', label: 'Câmera Veicular / Dashcam', icon: '📷' },
-  { value: 'chip', label: 'Chip M2M / IoT', icon: '💳' },
-  { value: 'acessorio', label: 'Acessório / Botão de Pânico', icon: '🔌' },
-  { value: 'identificador', label: 'Identificador / RFID / iButton', icon: '🪪' },
-  { value: 'outros', label: 'Outros Equipamentos', icon: '📦' },
+  { value: 'produto_equipamento', label: 'Automação', icon: '📦' },
+  { value: 'rastreador', label: 'Elétrica', icon: '🛰️' },
+  { value: 'sensor', label: 'Eletrônicos', icon: '📡' },
+  { value: 'sensor', label: 'Outros', icon: '📡' },
 ];
 
 export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
