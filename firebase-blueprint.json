@@ -140,7 +140,7 @@
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
-      "required": ["id", "name", "model", "category", "brand", "quantity", "minQuantity", "status"]
+      "required": ["id", "name", "model", "category", "quantity", "status"]
     },
     "stock_movements": {
       "title": "Stock Movements",

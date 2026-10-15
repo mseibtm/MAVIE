@@ -194,10 +194,8 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   };
 
   // Format BRL
-  const formatCurrency = (val: number | undefined | null) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-      typeof val === 'number' && !isNaN(val) ? val : 0
-    );
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   // Active Clients & MRR
   const activeClients = clients.filter((c) => c.status === 'active');
@@ -210,21 +208,21 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
     boletos.forEach((b) => {
       const d = b.paidAt || b.dueDate || b.createdAt;
-      if (d && typeof d === 'string' && d.includes('-')) periodsSet.add(d.substring(0, 7));
+      if (d) periodsSet.add(d.substring(0, 7));
     });
 
     sporadicServices.forEach((s) => {
-      if (s.date && typeof s.date === 'string' && s.date.includes('-')) periodsSet.add(s.date.substring(0, 7));
-      if (s.dueDate && typeof s.dueDate === 'string' && s.dueDate.includes('-')) periodsSet.add(s.dueDate.substring(0, 7));
+      if (s.date) periodsSet.add(s.date.substring(0, 7));
+      if (s.dueDate) periodsSet.add(s.dueDate.substring(0, 7));
     });
 
     expenses.forEach((e) => {
-      if (e.month && typeof e.month === 'string' && e.month.includes('-')) periodsSet.add(e.month);
-      if (e.dueDate && typeof e.dueDate === 'string' && e.dueDate.includes('-')) periodsSet.add(e.dueDate.substring(0, 7));
+      if (e.month) periodsSet.add(e.month);
+      if (e.dueDate) periodsSet.add(e.dueDate.substring(0, 7));
     });
 
     monthlyBalances.forEach((b) => {
-      if (b.month && typeof b.month === 'string' && b.month.includes('-')) periodsSet.add(b.month);
+      if (b.month) periodsSet.add(b.month);
     });
 
     // Ensure October 2026 and current month are present
@@ -234,14 +232,9 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
     const sorted = Array.from(periodsSet).sort().reverse();
 
-    return sorted.filter((p) => p && p.includes('-')).map((p) => {
+    return sorted.map((p) => {
       const [year, month] = p.split('-');
-      const yNum = parseInt(year);
-      const mNum = parseInt(month);
-      if (isNaN(yNum) || isNaN(mNum)) {
-        return { value: p, label: p };
-      }
-      const dateObj = new Date(yNum, mNum - 1, 1);
+      const dateObj = new Date(parseInt(year), parseInt(month) - 1, 1);
       const monthName = dateObj.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       return {
         value: p,
@@ -278,7 +271,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
   const realizedBoletosAmount = filteredBoletos
     .filter((b) => isBoletoPaid(b))
-    .reduce((acc, b) => acc + (b.amount || 0), 0);
+    .reduce((acc, b) => acc + b.amount, 0);
 
   const realizedSporadicAmount = filteredSporadicServices
     .filter((s) => isSporadicPaid(s))

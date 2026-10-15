@@ -235,8 +235,8 @@ export default function App() {
   useEffect(() => {
     // 1. Initial local load
     const loadedClients = getStoredClients();
-    const rawBoletos = getStoredBoletos();
-    const syncedBoletos = syncAndSaveBoletoStatuses(rawBoletos);
+    const loadedBoletos = getStoredBoletos();
+    const syncedBoletos = syncAndSaveBoletoStatuses(loadedBoletos);
     saveStoredBoletos(syncedBoletos);
     setClients(loadedClients);
     setBoletos(syncedBoletos);
@@ -289,7 +289,7 @@ export default function App() {
             const mergedRemote = cleanedRemote.map((rb) => {
               const lb = localMap.get(rb.id);
 
-              // Respect rb.status and preserve local PDF / receipt data URLs
+              // Normal boleto resolution: respect rb.status, never force 'paid'
               const resolvedStatus: BoletoStatus = rb.status;
               const resolvedPaidAt = resolvedStatus === 'paid' ? (rb.paidAt || lb?.paidAt || new Date().toISOString()) : undefined;
 
@@ -353,22 +353,8 @@ export default function App() {
       });
       const unsubSporadic = subscribeSporadicServices((remoteSporadic) => {
         setSporadicServices((prevLocal) => {
-          const localStored = getStoredSporadicServices();
-          const baseLocal = prevLocal.length > 0 ? prevLocal : localStored;
-          const localMap = new Map<string, SporadicService>(baseLocal.map((s) => [s.id, s]));
-          const cleanedRemote = (remoteSporadic || []).filter((rs) => !MOCK_SPORADIC_IDS.has(rs.id));
-
-          if (cleanedRemote.length === 0 && baseLocal.length > 0) {
-            baseLocal.forEach((s) => {
-              if (!MOCK_SPORADIC_IDS.has(s.id)) {
-                saveSporadicServiceToFirestore(s);
-              }
-            });
-            saveStoredSporadicServices(baseLocal);
-            return baseLocal;
-          }
-
-          const remoteIdSet = new Set(cleanedRemote.map((r) => r.id));
+          const localMap = new Map<string, SporadicService>(prevLocal.map((s) => [s.id, s]));
+          const cleanedRemote = remoteSporadic.filter((rs) => !MOCK_SPORADIC_IDS.has(rs.id));
           const mergedRemote = cleanedRemote.map((rs) => {
             const ls = localMap.get(rs.id);
             if (ls) {
@@ -376,23 +362,14 @@ export default function App() {
                 ...rs,
                 pdfFile: (rs.pdfFile && rs.pdfFile.dataUrl?.includes('[large_'))
                   ? (ls.pdfFile || rs.pdfFile)
-                  : (rs.pdfFile || ls.pdfFile),
+                  : rs.pdfFile,
                 paymentReceipt: (rs.paymentReceipt && rs.paymentReceipt.dataUrl?.includes('[large_'))
                   ? (ls.paymentReceipt || rs.paymentReceipt)
-                  : (rs.paymentReceipt || ls.paymentReceipt),
+                  : rs.paymentReceipt,
               };
             }
             return rs;
           });
-
-          // Preserve any locally entered sporadic services not yet returned by Firestore
-          baseLocal.forEach((ls) => {
-            if (!remoteIdSet.has(ls.id) && !MOCK_SPORADIC_IDS.has(ls.id)) {
-              mergedRemote.push(ls);
-              saveSporadicServiceToFirestore(ls);
-            }
-          });
-
           saveStoredSporadicServices(mergedRemote);
           setMonthlyBalances((prevBalances) => {
             const synced = syncMonthlyBalances(expenses, boletos, prevBalances, mergedRemote);
@@ -402,31 +379,16 @@ export default function App() {
           return mergedRemote;
         });
       });
-
       const unsubExpenses = subscribeExpenses((remoteExpenses) => {
         setExpenses((prevLocal) => {
-          const localStored = getStoredExpenses();
-          const baseLocal = prevLocal.length > 0 ? prevLocal : localStored;
-          const localMap = new Map<string, Expense>(baseLocal.map((e) => [e.id, e]));
-          const cleanedRemote = (remoteExpenses || []).filter((re) => {
+          const localMap = new Map<string, Expense>(prevLocal.map((e) => [e.id, e]));
+          const cleanedRemote = remoteExpenses.filter((re) => {
             if (MOCK_EXPENSE_IDS.has(re.id)) {
               deleteExpenseFromFirestore(re.id);
               return false;
             }
             return true;
           });
-
-          if (cleanedRemote.length === 0 && baseLocal.length > 0) {
-            baseLocal.forEach((e) => {
-              if (!MOCK_EXPENSE_IDS.has(e.id)) {
-                saveExpenseToFirestore(e);
-              }
-            });
-            saveStoredExpenses(baseLocal);
-            return baseLocal;
-          }
-
-          const remoteIdSet = new Set(cleanedRemote.map((r) => r.id));
           const mergedRemote = cleanedRemote.map((re) => {
             const le = localMap.get(re.id);
             if (le) {
@@ -434,20 +396,11 @@ export default function App() {
                 ...re,
                 receipt: (re.receipt && re.receipt.dataUrl?.includes('[large_'))
                   ? (le.receipt || re.receipt)
-                  : (re.receipt || le.receipt),
+                  : re.receipt,
               };
             }
             return re;
           });
-
-          // Preserve any locally entered expenses not yet returned by Firestore
-          baseLocal.forEach((le) => {
-            if (!remoteIdSet.has(le.id) && !MOCK_EXPENSE_IDS.has(le.id)) {
-              mergedRemote.push(le);
-              saveExpenseToFirestore(le);
-            }
-          });
-
           saveStoredExpenses(mergedRemote);
           setMonthlyBalances((prevBalances) => {
             const synced = syncMonthlyBalances(mergedRemote, boletos, prevBalances, sporadicServices);
@@ -457,7 +410,6 @@ export default function App() {
           return mergedRemote;
         });
       });
-
       const unsubBalances = subscribeMonthlyBalances((remoteBalances) => {
         const cleaned = (remoteBalances || []).filter((rb) => {
           if (MOCK_BALANCE_IDS.has(rb.id) || rb.id === 'bal-2026-09' || rb.id === 'bal-2026-08') {
@@ -466,28 +418,8 @@ export default function App() {
           }
           return true;
         });
-
-        const localStored = getStoredMonthlyBalances();
-        let finalBalances = [...cleaned];
-        if (cleaned.length === 0 && localStored.length > 0) {
-          localStored.forEach((b) => {
-            if (!MOCK_BALANCE_IDS.has(b.id)) {
-              saveMonthlyBalanceToFirestore(b);
-            }
-          });
-          finalBalances = localStored;
-        } else if (cleaned.length > 0) {
-          const remoteMap = new Map(cleaned.map((b) => [b.month, b]));
-          localStored.forEach((lb) => {
-            if (!remoteMap.has(lb.month) && !MOCK_BALANCE_IDS.has(lb.id)) {
-              finalBalances.push(lb);
-              saveMonthlyBalanceToFirestore(lb);
-            }
-          });
-        }
-
         setMonthlyBalances((prevBalances) => {
-          const synced = syncMonthlyBalances(expenses, boletos, finalBalances, sporadicServices);
+          const synced = syncMonthlyBalances(expenses, boletos, cleaned, sporadicServices);
           saveStoredMonthlyBalances(synced);
           return synced;
         });
@@ -1472,30 +1404,15 @@ export default function App() {
   ) => {
     const now = new Date().toISOString();
     const qty = Math.max(0, Number(deviceData.quantity) || 0);
-    const minQty = Math.max(1, Number(deviceData.minQuantity) || 5);
+    const minQty = deviceData.minQuantity && Number(deviceData.minQuantity) > 0 ? Number(deviceData.minQuantity) : 0;
     const status: 'available' | 'low_stock' | 'out_of_stock' =
-      qty === 0 ? 'out_of_stock' : qty <= minQty ? 'low_stock' : 'available';
-
-    const initialPriceHistory: PriceHistoryEntry[] = (deviceData.priceHistory && deviceData.priceHistory.length > 0)
-      ? deviceData.priceHistory
-      : (deviceData.unitCost && qty > 0)
-      ? [{
-          id: `pe-init-${Date.now()}`,
-          date: now,
-          quantity: qty,
-          unitCost: deviceData.unitCost,
-          totalCost: Number((qty * deviceData.unitCost).toFixed(2)),
-          newAverageCost: deviceData.unitCost,
-          notes: 'Cadastro inicial no estoque',
-        }]
-      : [];
+      qty === 0 ? 'out_of_stock' : (minQty > 0 && qty <= minQty) ? 'low_stock' : 'available';
 
     const newDevice: InventoryItem = {
       id: deviceData.id || `item-${Date.now()}`,
       ...deviceData,
       quantity: qty,
       minQuantity: minQty,
-      priceHistory: initialPriceHistory,
       status,
       createdAt: now,
       updatedAt: now,
@@ -1515,8 +1432,6 @@ export default function App() {
         itemName: newDevice.name,
         type: 'entry',
         quantity: qty,
-        unitCost: newDevice.unitCost,
-        totalCost: newDevice.unitCost ? Number((qty * newDevice.unitCost).toFixed(2)) : undefined,
         previousQuantity: 0,
         newQuantity: qty,
         reason: 'Cadastro Inicial no Estoque',
@@ -1536,9 +1451,9 @@ export default function App() {
   const handleUpdateDevice = (updatedDevice: InventoryItem) => {
     const now = new Date().toISOString();
     const qty = Math.max(0, Number(updatedDevice.quantity) || 0);
-    const minQty = Math.max(1, Number(updatedDevice.minQuantity) || 5);
+    const minQty = updatedDevice.minQuantity && Number(updatedDevice.minQuantity) > 0 ? Number(updatedDevice.minQuantity) : 0;
     const status: 'available' | 'low_stock' | 'out_of_stock' =
-      qty === 0 ? 'out_of_stock' : qty <= minQty ? 'low_stock' : 'available';
+      qty === 0 ? 'out_of_stock' : (minQty > 0 && qty <= minQty) ? 'low_stock' : 'available';
 
     const finalDevice: InventoryItem = {
       ...updatedDevice,
@@ -1582,40 +1497,9 @@ export default function App() {
           const newQty = Math.max(0, movement.newQuantity);
           const status: 'available' | 'low_stock' | 'out_of_stock' =
             newQty === 0 ? 'out_of_stock' : newQty <= item.minQuantity ? 'low_stock' : 'available';
-
-          let newUnitCost = item.unitCost;
-          const updatedHistory: PriceHistoryEntry[] = item.priceHistory ? [...item.priceHistory] : [];
-
-          // Preço Médio Ponderado e Histórico de Preços em Entrada de Volume
-          if (movement.type === 'entry' && movement.unitCost && movement.unitCost > 0) {
-            const prevQty = item.quantity;
-            const prevAvg = item.unitCost || 0;
-            const addedQty = movement.quantity;
-            const entryCost = movement.unitCost;
-
-            if (prevQty <= 0 || prevAvg <= 0) {
-              newUnitCost = entryCost;
-            } else {
-              newUnitCost = Number(((prevQty * prevAvg + addedQty * entryCost) / (prevQty + addedQty)).toFixed(2));
-            }
-
-            updatedHistory.push({
-              id: `pe-${Date.now()}`,
-              date: now,
-              quantity: addedQty,
-              unitCost: entryCost,
-              totalCost: Number((addedQty * entryCost).toFixed(2)),
-              previousAverageCost: prevAvg,
-              newAverageCost: newUnitCost,
-              notes: movement.reason,
-            });
-          }
-
           const updatedItem: InventoryItem = {
             ...item,
             quantity: newQty,
-            unitCost: newUnitCost,
-            priceHistory: updatedHistory,
             status,
             updatedAt: now,
           };

@@ -168,33 +168,19 @@ export type DeviceCategory =
   | 'chip'
   | 'acessorio'
   | 'identificador'
-  | 'outros'
-  | string;
-
-export interface PriceHistoryEntry {
-  id: string;
-  date: string; // ISO date
-  quantity: number; // Quantidade que entrou
-  unitCost: number; // Preço pago por unidade nessa entrada
-  totalCost: number; // Total pago no lote
-  previousAverageCost?: number; // Preço médio antes desta entrada
-  newAverageCost: number; // Novo preço médio ponderado resultante
-  notes?: string;
-}
+  | 'outros';
 
 export interface InventoryItem {
   id: string;
   name: string;
   model: string;
-  category: string; // Campo de texto livre
-  brand: string;
-  sku?: string; // Código SKU opcional / oculto
+  category: DeviceCategory;
+  brand?: string;
+  sku?: string;
   quantity: number;
-  minQuantity: number;
-  unitCost?: number; // Preço médio unitário ponderado
-  priceHistory?: PriceHistoryEntry[]; // Histórico de preço de cada entrada
-  imageUrl?: string; // Foto do dispositivo para fácil visualização
-  location?: string; // Opcional / removido da interface principal
+  minQuantity?: number;
+  unitCost?: number;
+  location?: string;
   description?: string;
   status: 'available' | 'low_stock' | 'out_of_stock';
   createdAt: string;
@@ -209,8 +195,6 @@ export interface StockMovement {
   itemName: string;
   type: MovementType;
   quantity: number;
-  unitCost?: number; // Custo unitário desta entrada
-  totalCost?: number; // Valor total da movimentação
   previousQuantity: number;
   newQuantity: number;
   reason: string;

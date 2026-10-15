@@ -91,7 +91,7 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
   const totalUnits = inventoryItems.reduce((acc, curr) => acc + curr.quantity, 0);
   const totalModels = inventoryItems.length;
   const lowStockItems = inventoryItems.filter(
-    (i) => i.quantity > 0 && i.quantity <= i.minQuantity
+    (i) => (i.minQuantity || 0) > 0 && i.quantity > 0 && i.quantity <= (i.minQuantity || 0)
   );
   const outOfStockItems = inventoryItems.filter((i) => i.quantity === 0);
   const totalStockValue = inventoryItems.reduce(
@@ -108,17 +108,18 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
     const matchSearch =
       item.name.toLowerCase().includes(q) ||
       item.model.toLowerCase().includes(q) ||
-      item.sku.toLowerCase().includes(q) ||
-      item.brand.toLowerCase().includes(q) ||
+      (item.sku && item.sku.toLowerCase().includes(q)) ||
+      (item.brand && item.brand.toLowerCase().includes(q)) ||
       (item.location && item.location.toLowerCase().includes(q));
 
     const matchCategory = selectedCategory === 'all' || item.category === selectedCategory;
 
     let matchStatus = true;
+    const minQ = item.minQuantity || 0;
     if (selectedStatus === 'available') {
-      matchStatus = item.quantity > item.minQuantity;
+      matchStatus = item.quantity > 0 && (minQ === 0 || item.quantity > minQ);
     } else if (selectedStatus === 'low_stock') {
-      matchStatus = item.quantity > 0 && item.quantity <= item.minQuantity;
+      matchStatus = minQ > 0 && item.quantity > 0 && item.quantity <= minQ;
     } else if (selectedStatus === 'out_of_stock') {
       matchStatus = item.quantity === 0;
     }
@@ -491,15 +492,15 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredItems.map((item) => {
             const cat = CATEGORY_LABELS[item.category] || CATEGORY_LABELS.outros;
+            const minQ = item.minQuantity || 0;
             const isOutOfStock = item.quantity === 0;
-            const isLowStock = item.quantity > 0 && item.quantity <= item.minQuantity;
-            const isHealthy = item.quantity > item.minQuantity;
+            const isLowStock = minQ > 0 && item.quantity > 0 && item.quantity <= minQ;
+            const isHealthy = item.quantity > 0 && (minQ === 0 || item.quantity > minQ);
 
             // Health percentage (relationship between current and min threshold)
-            const healthPercent = Math.min(
-              100,
-              Math.round((item.quantity / Math.max(1, item.minQuantity * 2)) * 100)
-            );
+            const healthPercent = minQ > 0
+              ? Math.min(100, Math.round((item.quantity / Math.max(1, minQ * 2)) * 100))
+              : item.quantity > 0 ? 100 : 0;
 
             return (
               <div
@@ -545,8 +546,7 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
                     {item.name}
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-                    <span className="font-bold text-slate-300">{item.brand}</span>
-                    <span>&bull;</span>
+                    {item.brand && <span className="font-bold text-slate-300">{item.brand} &bull;</span>}
                     <span className="font-mono text-indigo-400 font-bold">{item.model}</span>
                   </div>
 
@@ -556,9 +556,13 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                         Saldo Físico
                       </span>
-                      <span className="text-[11px] font-mono text-slate-400">
-                        Mínimo: <strong className="text-amber-400 font-bold">{item.minQuantity} un</strong>
-                      </span>
+                      {item.minQuantity && item.minQuantity > 0 ? (
+                        <span className="text-[11px] font-mono text-slate-400">
+                          Mínimo: <strong className="text-amber-400 font-bold">{item.minQuantity} un</strong>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-medium">Sem estoque mínimo</span>
+                      )}
                     </div>
 
                     <div className="flex items-baseline justify-between gap-2">
@@ -737,7 +741,7 @@ export const AdminInventoryView: React.FC<AdminInventoryViewProps> = ({
                           {item.quantity} un
                         </div>
                         <span className="text-[10px] text-slate-500 font-mono">
-                          Mín: {item.minQuantity}
+                          {item.minQuantity && item.minQuantity > 0 ? `Mín: ${item.minQuantity}` : 'Sem mínimo'}
                         </span>
                       </td>
                       <td className="p-4 text-center">
