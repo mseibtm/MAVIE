@@ -34,7 +34,8 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
   const [company, setCompany] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
-  const [monthlyFee, setMonthlyFee] = useState('1450.00');
+  const [isRecurring, setIsRecurring] = useState(true);
+  const [monthlyFee, setMonthlyFee] = useState('0.00');
   const [password, setPassword] = useState('123');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
@@ -47,7 +48,8 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
     setCompany('');
     setAddress('');
     setNotes('');
-    setMonthlyFee('1450.00');
+    setIsRecurring(true);
+    setMonthlyFee('0.00');
     setPassword('123');
     setStatus('active');
     setIsModalOpen(true);
@@ -62,6 +64,8 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
     setCompany(client.company || '');
     setAddress(client.address || '');
     setNotes(client.notes || '');
+    const clientIsRecurring = client.isRecurring !== false && (client.monthlyFee || 0) > 0;
+    setIsRecurring(clientIsRecurring);
     setMonthlyFee((client.monthlyFee || 0).toString());
     setPassword(client.password || '123');
     setStatus(client.status);
@@ -86,9 +90,9 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
       return;
     }
 
-    const numericFee = parseFloat(monthlyFee.replace(',', '.'));
-    if (isNaN(numericFee) || numericFee < 0) {
-      onToast('error', 'Mensalidade Inválida', 'Informe um valor numérico válido para a mensalidade.');
+    const numericFee = isRecurring ? parseFloat(monthlyFee.replace(',', '.')) : 0;
+    if (isRecurring && (isNaN(numericFee) || numericFee < 0)) {
+      onToast('error', 'Mensalidade Inválida', 'Informe um valor numérico válido para a mensalidade recorrente.');
       return;
     }
 
@@ -109,10 +113,17 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
         address: address.trim(),
         notes: notes.trim(),
         monthlyFee: numericFee,
+        isRecurring,
         password: password.trim() || '123',
         status,
       });
-      onToast('success', 'Cliente Cadastrado!', `${name} foi adicionado com mensalidade de R$ ${numericFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+      onToast(
+        'success',
+        'Cliente Cadastrado!',
+        isRecurring
+          ? `${name} foi cadastrado como recorrente (MRR R$ ${numericFee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`
+          : `${name} foi cadastrado como cliente avulso (não recorrente).`
+      );
     } else {
       onUpdateClient({
         ...editingClient,
@@ -124,10 +135,11 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
         address: address.trim(),
         notes: notes.trim(),
         monthlyFee: numericFee,
+        isRecurring,
         password: password.trim() || '123',
         status,
       });
-      onToast('success', 'Cliente Atualizado!', 'Dados cadastrais e mensalidade salvos.');
+      onToast('success', 'Cliente Atualizado!', 'Dados cadastrais e modalidade de recorrência salvos.');
     }
 
     setIsModalOpen(false);
@@ -154,6 +166,12 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
+  const activeClients = clients.filter(c => c.status === 'active');
+  const recurringClients = clients.filter(c => c.isRecurring !== false && (c.monthlyFee || 0) > 0);
+  const recurringActiveClients = activeClients.filter(c => c.isRecurring !== false && (c.monthlyFee || 0) > 0);
+  const nonRecurringClients = clients.filter(c => c.isRecurring === false || (c.monthlyFee || 0) === 0);
+  const totalContractedMRR = recurringActiveClients.reduce((sum, c) => sum + (c.monthlyFee || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* Top Bar Banner */}
@@ -165,7 +183,7 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
           </div>
           <h1 className="text-2xl font-black text-white">Clientes Efetivos & Mensalidades</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Defina mensalidade contratada, dados cadastrais e senha de acesso individual para cada cliente.
+            Defina mensalidade contratada, dados cadastrais e controle de clientes recorrentes (MRR) ou avulsos.
           </p>
         </div>
 
@@ -183,11 +201,55 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
 
           <button
             onClick={openAddModal}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition-all shrink-0 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>Novo Cliente</span>
           </button>
+        </div>
+      </div>
+
+      {/* Quick Summary KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+            Total de Clientes
+          </div>
+          <div className="text-2xl font-black text-white">{clients.length}</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {activeClients.length} ativos no portal
+          </p>
+        </div>
+
+        <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+            <TrendingUp className="w-3.5 h-3.5" />
+            Recorrência Contratada (MRR)
+          </div>
+          <div className="text-2xl font-black text-emerald-400">{formatCurrency(totalContractedMRR)}</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {recurringActiveClients.length} cliente(s) recorrente(s) ativos
+          </p>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">
+            Clientes Mensalistas
+          </div>
+          <div className="text-2xl font-black text-white">{recurringClients.length}</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Com mensalidade fixa contratada
+          </p>
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+          <div className="text-[10px] font-bold text-sky-400 uppercase tracking-wider mb-1">
+            Clientes Avulsos (Sem MRR)
+          </div>
+          <div className="text-2xl font-black text-white">{nonRecurringClients.length}</div>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            Cobrança por demanda / esporádica
+          </p>
         </div>
       </div>
 
@@ -202,71 +264,104 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredClients.map((client) => (
-            <div
-              key={client.id}
-              className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 shadow-md transition-all flex flex-col justify-between space-y-4"
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-950 text-amber-300 border border-slate-800 uppercase tracking-wider font-mono">
-                    CPF/CNPJ: {client.cpf}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                      client.status === 'active'
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                        : 'bg-rose-950 text-rose-300 border border-rose-800'
-                    }`}
-                  >
-                    {client.status === 'active' ? 'Ativo' : 'Inativo'}
-                  </span>
-                </div>
+          {filteredClients.map((client) => {
+            const isClientRecurring = client.isRecurring !== false && (client.monthlyFee || 0) > 0;
 
-                <h3 className="text-base font-bold text-white">{client.name}</h3>
-                {client.company && (
-                  <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
-                    <Building className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{client.company}</span>
-                  </p>
-                )}
+            return (
+              <div
+                key={client.id}
+                className="bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-2xl p-5 shadow-md transition-all flex flex-col justify-between space-y-4"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2.5 py-0.5 text-[10px] font-black rounded-full bg-slate-950 text-amber-300 border border-slate-800 uppercase tracking-wider font-mono">
+                        CPF/CNPJ: {client.cpf}
+                      </span>
+                      {isClientRecurring ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          Recorrente
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                          Avulso
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-bold rounded-full shrink-0 ${
+                        client.status === 'active'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          : 'bg-rose-950 text-rose-300 border border-rose-800'
+                      }`}
+                    >
+                      {client.status === 'active' ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
 
-                {/* Monthly Fee Box */}
-                <div className="mt-3 p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                      <TrendingUp className="w-3 h-3" />
-                      Mensalidade Contratada
-                    </div>
-                    <div className="text-sm font-black text-white mt-0.5">
-                      {formatCurrency(client.monthlyFee || 0)} <span className="text-[10px] font-normal text-slate-400">/ mês</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
-                      <Key className="w-3 h-3 text-slate-500" />
-                      Senha: <span className="text-slate-200 font-bold">{client.password || '123'}</span>
-                    </div>
-                  </div>
-                </div>
+                  <h3 className="text-base font-bold text-white">{client.name}</h3>
+                  {client.company && (
+                    <p className="text-xs text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                      <Building className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{client.company}</span>
+                    </p>
+                  )}
 
-                <div className="mt-3 space-y-1.5 text-xs text-slate-300">
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="truncate">{client.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <Phone className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span>{client.phone}</span>
-                  </div>
-                  {client.address && (
-                    <div className="flex items-start gap-2 text-slate-400">
-                      <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                      <span className="line-clamp-2 text-[11px]">{client.address}</span>
+                  {/* Monthly Fee Box - ONLY DISPLAY FOR RECURRING CLIENTS */}
+                  {isClientRecurring ? (
+                    <div className="mt-3 p-3 bg-amber-950/30 border border-amber-500/20 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                          <TrendingUp className="w-3 h-3" />
+                          Mensalidade Contratada
+                        </div>
+                        <div className="text-sm font-black text-white mt-0.5">
+                          {formatCurrency(client.monthlyFee || 0)} <span className="text-[10px] font-normal text-slate-400">/ mês</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                          <Key className="w-3 h-3 text-slate-500" />
+                          Senha: <span className="text-slate-200 font-bold">{client.password || '123'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 p-3 bg-slate-950/70 border border-slate-800 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Contrato / Cobrança
+                        </div>
+                        <div className="text-xs font-semibold text-slate-300 mt-0.5">
+                          Cliente Avulso (Sem Mensalidade Fixa)
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                          <Key className="w-3 h-3 text-slate-500" />
+                          Senha: <span className="text-slate-200 font-bold">{client.password || '123'}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  <div className="mt-3 space-y-1.5 text-xs text-slate-300">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate">{client.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Phone className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{client.phone}</span>
+                    </div>
+                    {client.address && (
+                      <div className="flex items-start gap-2 text-slate-400">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <span className="line-clamp-2 text-[11px]">{client.address}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               {/* Action Buttons */}
               <div className="pt-3 border-t border-slate-800 space-y-2">
@@ -362,23 +457,93 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
                 </div>
               </div>
 
+              {/* Tipo de Contrato: Recorrente vs Não Recorrente */}
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                <label className="block text-slate-300 font-bold uppercase tracking-wider text-[10px]">
+                  Tipo de Contrato / Faturamento *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRecurring(true);
+                      if (monthlyFee === '0' || monthlyFee === '0.00' || !monthlyFee) {
+                        setMonthlyFee('150.00');
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                      isRecurring
+                        ? 'bg-amber-500/15 border-amber-500/60 text-white shadow-sm'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                      isRecurring ? 'border-amber-400 bg-amber-400' : 'border-slate-600'
+                    }`}>
+                      {isRecurring && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-white">Cliente Recorrente (MRR)</div>
+                      <div className="text-[10px] text-slate-400">Contrato com mensalidade fixa mensal</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRecurring(false);
+                      setMonthlyFee('0.00');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all cursor-pointer ${
+                      !isRecurring
+                        ? 'bg-sky-500/15 border-sky-500/60 text-white shadow-sm'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0 ${
+                      !isRecurring ? 'border-sky-400 bg-sky-400' : 'border-slate-600'
+                    }`}>
+                      {!isRecurring && <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-white">Cliente Avulso (Sem MRR)</div>
+                      <div className="text-[10px] text-slate-400">Sem mensalidade, cobra sob demanda</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               {/* Mensalidade & Senha Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-950/20 border border-amber-500/20 rounded-xl">
-                <div>
-                  <label className="block text-amber-300 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    Valor da Mensalidade (R$) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={monthlyFee}
-                    onChange={(e) => setMonthlyFee(e.target.value)}
-                    placeholder="1450.00"
-                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-white font-mono font-black text-sm focus:ring-2 focus:ring-amber-500"
-                    required
-                  />
-                </div>
+                {isRecurring ? (
+                  <div>
+                    <label className="block text-amber-300 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5" />
+                      Valor da Mensalidade (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={monthlyFee}
+                      onChange={(e) => setMonthlyFee(e.target.value)}
+                      placeholder="Ex: 150.00"
+                      className="w-full px-3.5 py-2.5 bg-slate-950 border border-amber-500/40 rounded-xl text-white font-mono font-black text-sm focus:ring-2 focus:ring-amber-500"
+                      required={isRecurring}
+                    />
+                    <span className="text-[10px] text-slate-400 mt-0.5 block">Soma no valor de recorrência contratado</span>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-slate-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <span>Mensalidade / MRR</span>
+                    </label>
+                    <div className="px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-400 text-xs italic font-medium">
+                      Sem mensalidade (Cliente Avulso)
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-0.5 block">Não computado no MRR</span>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-slate-300 font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -393,6 +558,7 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500"
                     required
                   />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Acesso individual do cliente</span>
                 </div>
               </div>
 

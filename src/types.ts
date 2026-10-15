@@ -17,7 +17,8 @@ export interface Client {
   company?: string;
   address?: string;
   notes?: string;
-  monthlyFee: number; // Mensalidade recorrente em R$
+  monthlyFee: number; // Mensalidade recorrente em R$ (0 para não recorrentes)
+  isRecurring?: boolean; // Se o cliente possui mensalidade contratada (recorrente/MRR) ou é avulso
   password?: string;   // Senha de acesso individual LGPD
   status: 'active' | 'inactive';
   createdAt: string;

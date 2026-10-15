@@ -12,6 +12,8 @@
         "phone": { "type": "string" },
         "city": { "type": "string" },
         "state": { "type": "string" },
+        "monthlyFee": { "type": "number" },
+        "isRecurring": { "type": "boolean" },
         "createdAt": { "type": "string" }
       },
       "required": ["id", "name", "cpfCnpj", "email"]
