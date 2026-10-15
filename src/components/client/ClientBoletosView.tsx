@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { CreditCard, QrCode, Copy, Check, Eye, AlertTriangle, CheckCircle2, Clock, Calendar, Upload, Download, FileCheck, FileText, FileDown } from 'lucide-react';
 import { Boleto, Client, PDFAttachment, BoletoStatus } from '../../types';
 import { BoletoModal } from '../modals/BoletoModal';
@@ -18,6 +18,7 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
   onToast,
 }) => {
   const [filter, setFilter] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
+  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [issueDateFilter, setIssueDateFilter] = useState<string>('');
   const [selectedBoleto, setSelectedBoleto] = useState<Boleto | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -43,11 +44,52 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
 
   const clientBoletos = boletos.filter((b) => b.clientId === client.id);
 
+  const formatMonthName = (m: string) => {
+    if (!m || m === 'all') return 'Todos os Meses';
+    const [year, month] = m.split('-');
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const idx = parseInt(month, 10) - 1;
+    return idx >= 0 && idx < 12 ? `${months[idx]} de ${year}` : m;
+  };
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+
+    clientBoletos.forEach((b) => {
+      if (b.dueDate && b.dueDate.length >= 7) {
+        set.add(b.dueDate.substring(0, 7));
+      }
+      if (b.createdAt && b.createdAt.length >= 7) {
+        set.add(b.createdAt.substring(0, 7));
+      }
+      if (b.paidAt && b.paidAt.length >= 7) {
+        set.add(b.paidAt.substring(0, 7));
+      }
+    });
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    for (let m = 1; m <= 12; m++) {
+      set.add(`${currentYear}-${String(m).padStart(2, '0')}`);
+    }
+
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [clientBoletos]);
+
   const filteredBoletos = clientBoletos.filter((b) => {
     const effectiveStatus = getEffectiveStatus(b);
     const matchStatus = filter === 'all' ? true : effectiveStatus === filter;
+    const matchMonth =
+      monthFilter === 'all'
+        ? true
+        : (b.dueDate && b.dueDate.startsWith(monthFilter)) ||
+          (b.createdAt && b.createdAt.startsWith(monthFilter)) ||
+          (b.paidAt && b.paidAt.startsWith(monthFilter));
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
-    return matchStatus && matchIssueDate;
+    return matchStatus && matchMonth && matchIssueDate;
   });
 
   const pendingTotal = clientBoletos
@@ -237,23 +279,58 @@ export const ClientBoletosView: React.FC<ClientBoletosViewProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Filtrar Emissão:</span>
-          <input
-            type="date"
-            value={issueDateFilter}
-            onChange={(e) => setIssueDateFilter(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
-          />
-          {issueDateFilter && (
-            <button
-              type="button"
-              onClick={() => setIssueDateFilter('')}
-              className="px-2 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700"
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {/* Mês de Referência */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-amber-400" />
+              Mês:
+            </span>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              className={`px-3 py-1.5 bg-slate-950 border rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500 transition-colors ${
+                monthFilter !== 'all' ? 'border-amber-500/80 text-amber-300 bg-amber-950/20' : 'border-slate-700'
+              }`}
             >
-              Limpar
-            </button>
-          )}
+              <option value="all">Todos os Meses</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>
+                  {formatMonthName(m)}
+                </option>
+              ))}
+            </select>
+            {monthFilter !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setMonthFilter('all')}
+                className="px-2 py-1 text-xs font-bold text-amber-400 hover:text-amber-300 rounded-lg hover:bg-slate-800"
+                title="Limpar filtro de mês"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Emissão Específica */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Emissão:</span>
+            <input
+              type="date"
+              value={issueDateFilter}
+              onChange={(e) => setIssueDateFilter(e.target.value)}
+              className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
+            />
+            {issueDateFilter && (
+              <button
+                type="button"
+                onClick={() => setIssueDateFilter('')}
+                className="px-2 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

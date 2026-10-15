@@ -14,7 +14,7 @@ const CATEGORIES: { value: DeviceCategory; label: string; icon: string }[] = [
   { value: 'produto_equipamento', label: 'Automação', icon: '📦' },
   { value: 'rastreador', label: 'Elétrica', icon: '🛰️' },
   { value: 'sensor', label: 'Eletrônicos', icon: '📡' },
-  { value: 'sensor', label: 'Outros', icon: '📡' },
+  { value: 'outros', label: 'Outros', icon: '📦' },
 ];
 
 export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({

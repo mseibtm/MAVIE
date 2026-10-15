@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   CreditCard,
   Plus,
@@ -68,6 +68,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
 }) => {
   const [selectedClientId, setSelectedClientId] = useState<string>(initialSelectedClientId);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [monthFilter, setMonthFilter] = useState<string>('all');
   const [issueDateFilter, setIssueDateFilter] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -260,11 +261,55 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     return b.status;
   };
 
+  const formatMonthName = (m: string) => {
+    if (!m || m === 'all') return 'Todos os Meses';
+    const [year, month] = m.split('-');
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const idx = parseInt(month, 10) - 1;
+    return idx >= 0 && idx < 12 ? `${months[idx]} de ${year}` : m;
+  };
+
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+
+    boletos.forEach((b) => {
+      if (b.dueDate && b.dueDate.length >= 7) {
+        set.add(b.dueDate.substring(0, 7));
+      }
+      if (b.createdAt && b.createdAt.length >= 7) {
+        set.add(b.createdAt.substring(0, 7));
+      }
+      if (b.paidAt && b.paidAt.length >= 7) {
+        set.add(b.paidAt.substring(0, 7));
+      }
+    });
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    for (let m = 1; m <= 12; m++) {
+      set.add(`${currentYear}-${String(m).padStart(2, '0')}`);
+    }
+
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [boletos]);
+
   const filteredBoletos = boletos.filter((b) => {
     const client = clients.find((c) => c.id === b.clientId);
     if (!client) return false;
     const matchClient = selectedClientId ? b.clientId === selectedClientId : true;
     const matchStatus = statusFilter === 'all' ? true : getEffectiveStatus(b) === statusFilter;
+    
+    // Month filter: matches either due date (vencimento) or creation/payment month
+    const matchMonth =
+      monthFilter === 'all'
+        ? true
+        : (b.dueDate && b.dueDate.startsWith(monthFilter)) ||
+          (b.createdAt && b.createdAt.startsWith(monthFilter)) ||
+          (b.paidAt && b.paidAt.startsWith(monthFilter));
+
     const matchIssueDate = issueDateFilter ? b.createdAt.startsWith(issueDateFilter) : true;
     const matchSearch =
       b.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -272,7 +317,7 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.cpf.includes(searchTerm);
 
-    return matchClient && matchStatus && matchIssueDate && matchSearch;
+    return matchClient && matchStatus && matchMonth && matchIssueDate && matchSearch;
   });
 
   const formatCurrency = (val: number) =>
@@ -453,79 +498,151 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800">
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            Filtrar por Cliente
-          </label>
-          <select
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
-          >
-            <option value="">Todos os Clientes</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.cpf})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            Status Financeiro
-          </label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
-          >
-            <option value="all">Todos os Status</option>
-            <option value="pending">A vencer</option>
-            <option value="paid">Pago</option>
-            <option value="overdue">Em atraso</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            Data de Emissão
-          </label>
-          <div className="flex items-center gap-1">
-            <input
-              type="date"
-              value={issueDateFilter}
-              onChange={(e) => setIssueDateFilter(e.target.value)}
+      <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+          {/* Cliente */}
+          <div className="lg:col-span-3">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Filtrar por Cliente
+            </label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
               className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
-            />
-            {issueDateFilter && (
-              <button
-                type="button"
-                onClick={() => setIssueDateFilter('')}
-                className="px-2 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 shrink-0"
-                title="Limpar Data"
+            >
+              <option value="">Todos os Clientes</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.cpf})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Financeiro */}
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Status Financeiro
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="all">Todos os Status</option>
+              <option value="pending">A vencer</option>
+              <option value="paid">Pago</option>
+              <option value="overdue">Em atraso</option>
+            </select>
+          </div>
+
+          {/* Filtrar por Mês */}
+          <div className="lg:col-span-3">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3 h-3 text-amber-400" />
+                <span>Filtrar por Mês</span>
+              </span>
+              {monthFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setMonthFilter('all')}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 font-bold lowercase"
+                >
+                  limpar
+                </button>
+              )}
+            </label>
+            <div className="relative">
+              <select
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className={`w-full px-3 py-2 bg-slate-950 border rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500 transition-colors ${
+                  monthFilter !== 'all'
+                    ? 'border-amber-500/80 text-amber-300 bg-amber-950/20'
+                    : 'border-slate-700'
+                }`}
               >
-                Limpar
-              </button>
+                <option value="all">Todos os Meses</option>
+                {availableMonths.map((m) => (
+                  <option key={m} value={m}>
+                    {formatMonthName(m)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Data de Emissão */}
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Data de Emissão
+            </label>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={issueDateFilter}
+                onChange={(e) => setIssueDateFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-semibold text-white focus:ring-2 focus:ring-amber-500"
+              />
+              {issueDateFilter && (
+                <button
+                  type="button"
+                  onClick={() => setIssueDateFilter('')}
+                  className="px-2 py-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 shrink-0"
+                  title="Limpar Data"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Busca por Palavra-Chave */}
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+              Buscar
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Descrição, Código ou Nome..."
+                className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Informações e Filtros Ativos */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80 text-xs">
+          <div className="text-slate-400">
+            Mostrando <strong className="text-white">{filteredBoletos.length}</strong> de <strong className="text-white">{boletos.length}</strong> boletos
+            {monthFilter !== 'all' && (
+              <span> no mês de <strong className="text-amber-400">{formatMonthName(monthFilter)}</strong></span>
+            )}
+            {selectedClientId && (
+              <span> do cliente <strong className="text-sky-400">{clients.find(c => c.id === selectedClientId)?.name}</strong></span>
             )}
           </div>
-        </div>
 
-        <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-            Buscar por Palavra-Chave
-          </label>
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Descrição, Código ou Nome..."
-              className="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-amber-500"
-            />
-          </div>
+          {(monthFilter !== 'all' || selectedClientId || statusFilter !== 'all' || issueDateFilter || searchTerm) && (
+            <button
+              type="button"
+              onClick={() => {
+                setMonthFilter('all');
+                setSelectedClientId('');
+                setStatusFilter('all');
+                setIssueDateFilter('');
+                setSearchTerm('');
+              }}
+              className="text-[11px] font-bold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
+            >
+              Limpar todos os filtros
+            </button>
+          )}
         </div>
       </div>
 

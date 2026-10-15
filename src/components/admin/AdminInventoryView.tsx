@@ -45,9 +45,9 @@ interface AdminInventoryViewProps {
 }
 
 const CATEGORY_LABELS: Record<DeviceCategory, { label: string; icon: string; color: string }> = {
-  produto_equipamento: { label: 'Produto / Equipamento', icon: '📦', color: 'from-blue-600/20 to-cyan-500/20 border-cyan-500/40 text-cyan-400' },
-  rastreador: { label: 'Rastreador GPS', icon: '🛰️', color: 'from-blue-500/20 to-indigo-500/20 border-blue-500/40 text-blue-400' },
-  sensor: { label: 'Sensor', icon: '📡', color: 'from-teal-500/20 to-emerald-500/20 border-teal-500/40 text-teal-400' },
+  produto_equipamento: { label: 'Automação', icon: '📦', color: 'from-blue-600/20 to-cyan-500/20 border-cyan-500/40 text-cyan-400' },
+  rastreador: { label: 'Elétrica', icon: '🛰️', color: 'from-blue-500/20 to-indigo-500/20 border-blue-500/40 text-blue-400' },
+  sensor: { label: 'Eletrônicos', icon: '📡', color: 'from-teal-500/20 to-emerald-500/20 border-teal-500/40 text-teal-400' },
   bloqueador: { label: 'Bloqueador / Relé', icon: '🔒', color: 'from-amber-500/20 to-orange-500/20 border-amber-500/40 text-amber-400' },
   camera: { label: 'Câmera / Dashcam', icon: '📷', color: 'from-purple-500/20 to-pink-500/20 border-purple-500/40 text-purple-400' },
   chip: { label: 'Chip M2M IoT', icon: '💳', color: 'from-sky-500/20 to-cyan-500/20 border-sky-500/40 text-sky-400' },

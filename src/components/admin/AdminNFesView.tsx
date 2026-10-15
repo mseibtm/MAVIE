@@ -77,7 +77,7 @@ export const AdminNFesView: React.FC<AdminNFesViewProps> = ({
     }
 
     const targetClient = clients.find(c => c.id === formClientId);
-    const fileName = pdfFile.fileName || pdfFile.name || 'Nota_Fiscal.pdf';
+    const fileName = pdfFile.name || 'Nota_Fiscal.pdf';
 
     onAddNFe({
       clientId: formClientId,
