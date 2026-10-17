@@ -277,16 +277,27 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
               <Edit className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className={`text-2xl font-black font-mono ${currentAccountBalance >= 0 ? 'text-sky-300' : 'text-rose-400'}`}>
-            {formatCurrency(currentAccountBalance)}
+          <div className="flex items-baseline justify-between">
+            <div className={`text-2xl font-black font-mono ${currentAccountBalance >= 0 ? 'text-sky-300' : 'text-rose-400'}`}>
+              {formatCurrency(currentAccountBalance)}
+            </div>
+            {initialBaseBalance === 0 && (
+              <span className="text-[10px] text-amber-400 font-bold bg-amber-950/60 border border-amber-800/80 px-2 py-0.5 rounded-full">
+                Base R$ 0,00
+              </span>
+            )}
           </div>
-          <div className="text-[10px] text-slate-400 mt-2 border-t border-slate-800/80 pt-2 flex items-center justify-between">
-            <span className="truncate max-w-[120px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
-            <span className="text-sky-400 font-semibold">
-              {totalReceitasRealizadas > 0 || paidExpensesAmount > 0
-                ? `Entradas: +${formatCurrency(totalReceitasRealizadas)} | Saídas: -${formatCurrency(paidExpensesAmount)}`
-                : 'Base Informada'}
-            </span>
+          <div className="text-[10px] text-slate-400 mt-2 border-t border-slate-800/80 pt-2 flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <span className="truncate max-w-[120px]">{currentBalanceRecord?.bankAccount || 'Conta Bancária'}</span>
+              <span className="text-slate-300 font-mono">
+                Base: <strong>{formatCurrency(initialBaseBalance)}</strong>
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+              <span className="text-emerald-400">+{formatCurrency(totalReceitasRealizadas)} ent.</span>
+              <span className="text-rose-400">-{formatCurrency(paidExpensesAmount)} saí.</span>
+            </div>
           </div>
         </div>
 
@@ -375,6 +386,26 @@ export const CashflowForecastView: React.FC<CashflowForecastViewProps> = ({
           </div>
         </div>
       </div>
+
+      {initialBaseBalance === 0 && (
+        <div className="p-4 bg-amber-950/40 border border-amber-500/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200">
+          <div className="flex items-center gap-2.5">
+            <Landmark className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <strong className="text-white block font-bold">Saldo Base de Partida em R$ 0,00 para {formatMonthTitle(targetMonth)}</strong>
+              <span className="text-slate-400 text-[11px]">
+                O saldo bancário atual está calculando apenas as movimentações deste mês sem base de partida. Clique ao lado para informar o saldo do dia 01 a partir do seu extrato bancário.
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={onOpenBalanceModal}
+            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shrink-0 transition-all cursor-pointer shadow-md shadow-amber-500/20"
+          >
+            Ajustar Saldo Base (Extrato)
+          </button>
+        </div>
+      )}
 
       {/* SECTION: CONCILIAÇÃO & FÓRMULA MATEMÁTICA TRANSPARENTE */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">

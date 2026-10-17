@@ -402,9 +402,10 @@ export const AdminClientsView: React.FC<AdminClientsViewProps> = ({
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
+    )}
 
       {/* Add / Edit Client Modal */}
       {isModalOpen && (

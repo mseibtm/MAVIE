@@ -71,7 +71,6 @@ const MOCK_NFE_IDS = new Set(['nf-101', 'nf-102', 'nf-201']);
 const MOCK_TICKET_IDS = new Set(['tkt-101', 'tkt-201', 'tkt-301']);
 export const MOCK_SPORADIC_IDS = new Set(['sp-1', 'sp-2', 'sp-3', 'sp-101', 'sp-102', 'sp-201']);
 export const MOCK_EXPENSE_IDS = new Set(['exp-1', 'exp-2', 'exp-3', 'exp-4', 'exp-5']);
-export const MOCK_BALANCE_IDS = new Set(['bal-2026-09', 'bal-2026-08']);
 
 export const getStoredClients = (): Client[] => {
   const data = localStorage.getItem(KEYS.CLIENTS);
@@ -306,15 +305,14 @@ export const getStoredMonthlyBalances = (): MonthlyBalance[] => {
   if (!data) return [];
   try {
     const list: MonthlyBalance[] = JSON.parse(data);
-    return list.filter((b) => !MOCK_BALANCE_IDS.has(b.id));
+    return Array.isArray(list) ? list : [];
   } catch {
     return [];
   }
 };
 
 export const saveStoredMonthlyBalances = (balances: MonthlyBalance[]) => {
-  const filtered = balances.filter((b) => !MOCK_BALANCE_IDS.has(b.id));
-  safeSetItem(KEYS.MONTHLY_BALANCES, filtered);
+  safeSetItem(KEYS.MONTHLY_BALANCES, balances);
 };
 
 export const getStoredInventoryItems = (): InventoryItem[] => {

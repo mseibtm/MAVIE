@@ -54,6 +54,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const activeClients = clients.filter((c) => c.status === 'active');
   
+  // Recorrência Contratada (MRR) - Apenas clientes ativos com modalidade recorrente
+  const recurringActiveClients = activeClients.filter(
+    (c) => c.isRecurring !== false && (c.monthlyFee || 0) > 0
+  );
+  const totalContractedMRR = recurringActiveClients.reduce((acc, c) => acc + (c.monthlyFee || 0), 0);
+  const nonRecurringClients = clients.filter(
+    (c) => c.isRecurring === false || (c.monthlyFee || 0) === 0
+  );
+
   // Boletos Breakdown
   const pendingBoletos = boletos.filter((b) => b.status === 'pending');
   const overdueBoletos = boletos.filter((b) => b.status === 'overdue');
@@ -185,9 +194,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* TOP SUMMARY CARDS WITH RECHARTS VISUALIZATIONS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* CARD 1: BOLETOS EM ABERTO */}
+        {/* CARD 1: RECORRÊNCIA CONTRATADA (MRR) */}
+        <div
+          onClick={() => onNavigate('clients')}
+          className="bg-slate-900 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl p-5 shadow-lg cursor-pointer transition-all hover:shadow-emerald-500/5 group flex flex-col justify-between space-y-4"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-1.5 text-emerald-400 font-extrabold text-xs uppercase tracking-wider mb-1">
+                <TrendingUp className="w-4 h-4" />
+                <span>Recorrência Contratada</span>
+              </div>
+              <div className="text-2xl font-black text-emerald-400 group-hover:text-emerald-300 transition-colors font-mono">
+                {formatCurrency(totalContractedMRR)}
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                {recurringActiveClients.length} cliente(s) recorrente(s) ativos (MRR)
+              </p>
+            </div>
+            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 group-hover:scale-110 transition-transform">
+              <DollarSign className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="h-28 w-full bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex flex-col justify-center space-y-1.5 text-xs">
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Base Recorrente:</span>
+              <strong className="text-white font-mono">{recurringActiveClients.length} de {activeClients.length} ativos</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Clientes Avulsos:</span>
+              <strong className="text-sky-400 font-mono">{nonRecurringClients.length}</strong>
+            </div>
+            <div className="flex items-center justify-between text-slate-400 text-[11px] border-t border-slate-800/80 pt-1.5">
+              <span>Ticket Médio MRR:</span>
+              <strong className="text-emerald-400 font-mono">
+                {formatCurrency(recurringActiveClients.length > 0 ? totalContractedMRR / recurringActiveClients.length : 0)}
+              </strong>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/60">
+            <span>Gerenciar clientes e contratos</span>
+            <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+
+        {/* CARD 2: BOLETOS EM ABERTO */}
         <div
           onClick={() => onNavigate('admin-boletos')}
           className="bg-slate-900 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-5 shadow-lg cursor-pointer transition-all hover:shadow-amber-500/5 group flex flex-col justify-between space-y-4"
@@ -494,22 +549,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="space-y-2">
-            {clients.slice(0, 4).map((c) => (
-              <div
-                key={c.id}
-                className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between"
-              >
-                <div>
-                  <div className="text-xs font-bold text-white">{c.name}</div>
-                  <div className="text-[11px] text-slate-400 font-mono">
-                    CPF: {c.cpf} • Mensalidade: <strong className="text-amber-400">{formatCurrency(c.monthlyFee || 0)}</strong>
+            {clients.slice(0, 4).map((c) => {
+              const isRecurring = c.isRecurring !== false && (c.monthlyFee || 0) > 0;
+              return (
+                <div
+                  key={c.id}
+                  className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between"
+                >
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <span>{c.name}</span>
+                      {isRecurring ? (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                          Recorrente
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-800 text-slate-400 border border-slate-700">
+                          Avulso
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      CPF: {c.cpf} • {isRecurring ? (
+                        <>Recorrência: <strong className="text-emerald-400">{formatCurrency(c.monthlyFee || 0)}</strong></>
+                      ) : (
+                        <span className="text-slate-400 font-sans italic">Cliente Avulso (Sem MRR)</span>
+                      )}
+                    </div>
                   </div>
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    {c.status === 'active' ? 'Ativo' : 'Inativo'}
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-                  {c.status === 'active' ? 'Ativo' : 'Inativo'}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

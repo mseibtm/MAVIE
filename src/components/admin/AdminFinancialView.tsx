@@ -33,6 +33,8 @@ import {
   ArrowDownRight,
   PiggyBank,
   PieChart,
+  Info,
+  Edit3,
 } from 'lucide-react';
 import {
   BarChart,
@@ -93,7 +95,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   onSaveMonthlyBalance,
   onToast,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'cashflow' | 'expenses' | 'realized' | 'mrr' | 'sporadic'>('cashflow');
+  const [activeSubTab, setActiveSubTab] = useState<'cashflow' | 'expenses' | 'realized' | 'mrr' | 'sporadic' | 'balances'>('cashflow');
 
   // Month / Period Filter state (inicia a partir de Outubro/2026)
   const [selectedPeriod, setSelectedPeriod] = useState<string>('2026-10');
@@ -105,6 +107,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [customBalanceModalMonth, setCustomBalanceModalMonth] = useState<string | null>(null);
 
   // Viewing attachment modal (Boleto PDF or Payment receipt)
   const [viewingAttachment, setViewingAttachment] = useState<{ title: string; attachment: PDFAttachment } | null>(null);
@@ -197,10 +200,41 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  // Active Clients & MRR
+  // Active Clients & MRR (Apenas clientes com contrato recorrente ativo)
   const activeClients = clients.filter((c) => c.status === 'active');
-  const mrr = activeClients.reduce((acc, c) => acc + (c.monthlyFee || 0), 0);
+  const recurringActiveClients = activeClients.filter((c) => c.isRecurring !== false && (c.monthlyFee || 0) > 0);
+  const mrr = recurringActiveClients.reduce((acc, c) => acc + (c.monthlyFee || 0), 0);
   const arr = mrr * 12;
+
+  const formatMonthTitle = (monthStr: string) => {
+    if (!monthStr || monthStr === 'all') return 'Todos os Meses';
+    const [y, m] = monthStr.split('-');
+    const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+    const formatted = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  };
+
+  const allHistoricalMonths = useMemo(() => {
+    const set = new Set<string>();
+    monthlyBalances.forEach((b) => { if (b.month) set.add(b.month); });
+    boletos.forEach((b) => {
+      const d = b.paidAt || b.dueDate || b.createdAt;
+      if (d && d.length >= 7) set.add(d.substring(0, 7));
+    });
+    sporadicServices.forEach((s) => {
+      const d = s.paidAt || s.date || s.dueDate || s.createdAt;
+      if (d && d.length >= 7) set.add(d.substring(0, 7));
+    });
+    expenses.forEach((e) => {
+      const m = e.month || (e.dueDate && e.dueDate.substring(0, 7));
+      if (m && m.length >= 7) set.add(m.substring(0, 7));
+    });
+    set.add('2026-08');
+    set.add('2026-09');
+    set.add('2026-10');
+    set.add('2026-11');
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [monthlyBalances, boletos, sporadicServices, expenses]);
 
   // Available Month Filter Options (built dynamically from Boletos + Sporadic dates)
   const getAvailablePeriods = () => {
@@ -419,6 +453,18 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
           >
             <TrendingUp className="w-4 h-4 text-sky-300" />
             <span>Mensalidades (MRR)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('balances')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              activeSubTab === 'balances'
+                ? 'bg-sky-600 text-white shadow-md font-black ring-1 ring-sky-400/50'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+            }`}
+          >
+            <Landmark className="w-4 h-4 text-sky-300" />
+            <span>Histórico de Caixa & Saldos Base</span>
           </button>
         </div>
       </div>
@@ -1122,17 +1168,38 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                     const hasOverdue = clientBoletos.some((b) => b.status === 'overdue');
                     const hasPending = clientBoletos.some((b) => b.status === 'pending');
 
+                    const isClientRecurring = client.isRecurring !== false && (client.monthlyFee || 0) > 0;
+
                     return (
                       <tr key={client.id} className="hover:bg-slate-850/60 transition-colors">
                         <td className="p-4">
-                          <div className="font-bold text-white">{client.name}</div>
+                          <div className="font-bold text-white flex items-center gap-2">
+                            <span>{client.name}</span>
+                            {isClientRecurring ? (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                                Recorrente
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                Avulso
+                              </span>
+                            )}
+                          </div>
                           {client.company && <div className="text-[11px] text-slate-400">{client.company}</div>}
                         </td>
 
                         <td className="p-4 font-mono text-slate-300 font-semibold">{client.cpf}</td>
 
-                        <td className="p-4 font-mono font-black text-amber-400 text-sm">
-                          {formatCurrency(client.monthlyFee || 0)}
+                        <td className="p-4">
+                          {isClientRecurring ? (
+                            <span className="font-mono font-black text-emerald-400 text-sm">
+                              {formatCurrency(client.monthlyFee || 0)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic font-medium">
+                              Cliente Avulso (Sem MRR)
+                            </span>
+                          )}
                         </td>
 
                         <td className="p-4">
@@ -1176,6 +1243,166 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
                               Em dia (Sem pendências)
                             </span>
                           )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBTAB: HISTÓRICO DE CAIXA & SALDOS BASE */}
+      {activeSubTab === 'balances' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-sky-950/40 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                <Landmark className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-sky-400">
+                    Conciliação & Histórico de Caixa
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-mono font-bold">
+                    Extrato Bancário
+                  </span>
+                </div>
+                <h2 className="text-xl font-black text-white mt-0.5">
+                  Histórico de Caixa & Saldos Base de Partida
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Consulte os saldos iniciais (abertura em 01 do mês), total de entradas quitadas, saídas pagas e saldo bancário conciliado.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setCustomBalanceModalMonth(selectedPeriod !== 'all' ? selectedPeriod : '2026-10');
+                setIsBalanceModalOpen(true);
+              }}
+              className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-sky-950/40 flex items-center gap-2 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Ajustar Saldo em Conta</span>
+            </button>
+          </div>
+
+          {/* Explanatory Info Card */}
+          <div className="p-4 bg-slate-900/80 border border-sky-500/30 rounded-2xl flex items-start gap-3 text-xs text-slate-300">
+            <Info className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+            <div>
+              <strong className="text-white">Como funciona o cálculo do seu caixa:</strong>
+              <p className="text-slate-400 mt-1 leading-relaxed">
+                O <strong>Saldo Base</strong> é o saldo real que estava na sua conta bancária no início do mês (dia 01). A partir desse saldo base, o sistema soma automaticamente todos os boletos quitados e serviços esporádicos recebidos no mês, e debita as despesas operacionais pagas. Seus saldos históricos nunca são apagados e permanecem salvos em tempo real.
+              </p>
+            </div>
+          </div>
+
+          {/* Table of Monthly Balances */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-white">Competências & Conciliação Bancária</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Histórico de abertura, movimentação e fechamento mensal.
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-950 text-slate-400 font-bold uppercase tracking-wider text-[10px] border-b border-slate-800">
+                  <tr>
+                    <th className="p-4">Mês / Competência</th>
+                    <th className="p-4">Conta Bancária</th>
+                    <th className="p-4">Saldo Base (Abertura 01/MM)</th>
+                    <th className="p-4">(+) Entradas Quitadas</th>
+                    <th className="p-4">(-) Despesas Pagas</th>
+                    <th className="p-4">(=) Saldo Atual Conciliado</th>
+                    <th className="p-4">Notas / Extrato</th>
+                    <th className="p-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {allHistoricalMonths.map((m) => {
+                    const record = monthlyBalances.find((b) => b.month === m);
+                    const initial = record && typeof record.initialBalance === 'number' ? record.initialBalance : 0;
+                    
+                    const mBoletosPaid = boletos
+                      .filter((b) => isBoletoPaid(b) && (b.paidAt || b.dueDate || b.createdAt)?.startsWith(m))
+                      .reduce((sum, b) => sum + b.amount, 0);
+
+                    const mSporadicPaid = sporadicServices
+                      .filter((s) => isSporadicPaid(s) && (s.paidAt || s.date || s.dueDate || s.createdAt)?.startsWith(m))
+                      .reduce((sum, s) => sum + s.amount, 0);
+
+                    const mInflow = mBoletosPaid + mSporadicPaid;
+
+                    const mExpenses = expenses
+                      .filter((e) => e.status === 'paid' && (e.month === m || (e.dueDate && e.dueDate.startsWith(m))))
+                      .reduce((sum, e) => sum + e.amount, 0);
+
+                    const mCurrent = initial + mInflow - mExpenses;
+                    const isConfigured = record && record.initialBalance !== undefined && record.initialBalance > 0;
+
+                    return (
+                      <tr key={m} className="hover:bg-slate-850/60 transition-colors">
+                        <td className="p-4 font-bold text-white flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-sky-400" />
+                          <span>{formatMonthTitle(m)}</span>
+                          <span className="font-mono text-[10px] text-slate-400">({m})</span>
+                        </td>
+
+                        <td className="p-4 text-slate-300 font-medium">
+                          {record?.bankAccount || 'Conta Corrente Principal PJ'}
+                        </td>
+
+                        <td className="p-4">
+                          <div className={`font-mono font-black text-sm ${initial > 0 ? 'text-sky-400' : 'text-slate-400'}`}>
+                            {formatCurrency(initial)}
+                          </div>
+                          {!isConfigured && (
+                            <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-0.5">
+                              ⚠️ Saldo base R$ 0,00
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-4 font-mono font-bold text-emerald-400">
+                          +{formatCurrency(mInflow)}
+                        </td>
+
+                        <td className="p-4 font-mono font-bold text-rose-400">
+                          -{formatCurrency(mExpenses)}
+                        </td>
+
+                        <td className="p-4">
+                          <span className={`font-mono font-black text-sm ${mCurrent >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                            {formatCurrency(mCurrent)}
+                          </span>
+                        </td>
+
+                        <td className="p-4 text-slate-400 font-mono text-[11px]">
+                          {record?.notes || '—'}
+                        </td>
+
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => {
+                              setCustomBalanceModalMonth(m);
+                              setIsBalanceModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>{isConfigured ? 'Ajustar Saldo' : 'Definir Saldo'}</span>
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1492,7 +1719,7 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
 
       {/* Account Balance Modal (Saldo em Conta Bancária) */}
       {(() => {
-        const targetBalanceMonth = selectedPeriod !== 'all' ? selectedPeriod : '2026-10';
+        const targetBalanceMonth = customBalanceModalMonth || (selectedPeriod !== 'all' ? selectedPeriod : '2026-10');
         const targetPaidInflowAmount =
           boletos
             .filter((b) => {
@@ -1518,9 +1745,13 @@ export const AdminFinancialView: React.FC<AdminFinancialViewProps> = ({
         return (
           <AccountBalanceModal
             isOpen={isBalanceModalOpen}
-            onClose={() => setIsBalanceModalOpen(false)}
+            onClose={() => {
+              setIsBalanceModalOpen(false);
+              setCustomBalanceModalMonth(null);
+            }}
             onSave={(balance) => {
               if (onSaveMonthlyBalance) onSaveMonthlyBalance(balance);
+              setCustomBalanceModalMonth(null);
             }}
             currentBalanceRecord={
               monthlyBalances.find((b) => b.month === targetBalanceMonth) || null

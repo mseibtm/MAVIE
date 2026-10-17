@@ -328,8 +328,8 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   })();
 
-  // Active Management Month (strictly from October 2026 onwards)
-  const targetMonth = '2026-10';
+  // Active Management Month (respects monthFilter or defaults to October 2026)
+  const targetMonth = monthFilter !== 'all' ? monthFilter : '2026-10';
   const isBoletoPaid = (b: Boleto) => b.status === 'paid';
 
   const currentBalanceRecord = (monthlyBalances || []).find((b) => b.month === targetMonth) || null;
@@ -1294,18 +1294,23 @@ export const AdminBoletosView: React.FC<AdminBoletosViewProps> = ({
                   onChange={(e) => {
                     setFormClientId(e.target.value);
                     const selected = clients.find((c) => c.id === e.target.value);
-                    if (selected && selected.monthlyFee) {
+                    if (selected && selected.isRecurring !== false && selected.monthlyFee) {
                       setAmount(selected.monthlyFee.toString());
+                    } else {
+                      setAmount('');
                     }
                   }}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium focus:ring-2 focus:ring-amber-500"
                   required
                 >
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} — CPF: {c.cpf} {c.monthlyFee ? `(Mensalidade: R$ ${c.monthlyFee})` : ''}
-                    </option>
-                  ))}
+                  {clients.map((c) => {
+                    const isRec = c.isRecurring !== false && (c.monthlyFee || 0) > 0;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — CPF: {c.cpf} {isRec ? `(Mensalidade: R$ ${c.monthlyFee})` : '(Cliente Avulso)'}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

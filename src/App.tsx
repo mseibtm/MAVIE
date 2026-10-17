@@ -8,7 +8,7 @@ import {
   getStoredSporadicServices, saveStoredSporadicServices,
   getStoredExpenses, saveStoredExpenses,
   getStoredMonthlyBalances, saveStoredMonthlyBalances,
-  MOCK_SPORADIC_IDS, MOCK_EXPENSE_IDS, MOCK_BALANCE_IDS,
+  MOCK_SPORADIC_IDS, MOCK_EXPENSE_IDS,
   getStoredInventoryItems, saveStoredInventoryItems,
   getStoredStockMovements, saveStoredStockMovements,
   getStoredNotifications, saveStoredNotifications,
@@ -198,16 +198,15 @@ export default function App() {
     const updated = currentBalances.map((b) => {
       const expensesPaid = paidExpensesByMonth.get(b.month) || 0;
       const inflowPaid = paidInflowByMonth.get(b.month) || 0;
-      const newCurrent = b.initialBalance + inflowPaid - expensesPaid;
+      const initial = typeof b.initialBalance === 'number' ? b.initialBalance : 0;
+      const newCurrent = initial + inflowPaid - expensesPaid;
       if (b.currentBalance !== newCurrent) {
-        const updatedRecord = { ...b, currentBalance: newCurrent, updatedAt: new Date().toISOString() };
-        saveMonthlyBalanceToFirestore(updatedRecord);
-        return updatedRecord;
+        return { ...b, initialBalance: initial, currentBalance: newCurrent, updatedAt: new Date().toISOString() };
       }
       return b;
     });
 
-    // If there are paid boletos or paid expenses in a month without a monthly balance record yet, initialize one
+    // If there are paid boletos or paid expenses in a month without a monthly balance record yet, initialize one in-memory
     const existingMonthSet = new Set(updated.map((b) => b.month));
     allMonths.forEach((m) => {
       if (!existingMonthSet.has(m)) {
@@ -223,7 +222,6 @@ export default function App() {
             updatedAt: new Date().toISOString(),
           };
           updated.push(newRecord);
-          saveMonthlyBalanceToFirestore(newRecord);
         }
       }
     });
@@ -411,15 +409,16 @@ export default function App() {
         });
       });
       const unsubBalances = subscribeMonthlyBalances((remoteBalances) => {
-        const cleaned = (remoteBalances || []).filter((rb) => {
-          if (MOCK_BALANCE_IDS.has(rb.id) || rb.id === 'bal-2026-09' || rb.id === 'bal-2026-08') {
-            deleteMonthlyBalanceFromFirestore(rb.id);
-            return false;
-          }
-          return true;
-        });
+        const validBalances = remoteBalances || [];
         setMonthlyBalances((prevBalances) => {
-          const synced = syncMonthlyBalances(expenses, boletos, cleaned, sporadicServices);
+          const remoteMap = new Map(validBalances.map((b) => [b.month, b]));
+          const combined: MonthlyBalance[] = [...validBalances];
+          prevBalances.forEach((pb) => {
+            if (!remoteMap.has(pb.month)) {
+              combined.push(pb);
+            }
+          });
+          const synced = syncMonthlyBalances(expenses, boletos, combined, sporadicServices);
           saveStoredMonthlyBalances(synced);
           return synced;
         });
